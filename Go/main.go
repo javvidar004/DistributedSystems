@@ -218,19 +218,3 @@ func main() {
 
 	router.Run(":8080")
 }
-
-// codigo para conexion a db
-// Replace the connection details (user, dbname, password, host) with your own
-//    db, err := sqlx.Connect("postgres", "user=postgres dbname=yourdatabase sslmode=disable password=yourpassword host=localhost")
-//    if err != nil {
-//        log.Fatalln(err)
-//    }
-
-//    defer db.Close()
-
-// Test the connection to the database
-//    if err := db.Ping(); err != nil {
-//        log.Fatal(err)
-//    } else {
-//        log.Println("Successfully Connected")
-//    }
