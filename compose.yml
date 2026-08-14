@@ -1,0 +1,34 @@
+services:
+  api:
+    build: ./Go
+    ports:
+      - "8080:8080"
+    networks:
+      - redMVC
+    depends_on:
+      - db
+    #links:
+    #  - api
+
+
+  db:
+    build: ./Postgres
+    networks:
+      - redMVC
+    #links:
+    #  - db
+
+  frontend:
+    build: ./Node
+    ports:
+      - "3000:3000"
+    networks:
+      - redMVC
+    depends_on:
+      - api
+
+
+networks:
+  redMVC:
+    driver: bridge
+
