@@ -10,6 +10,14 @@ services:
     #links:
     #  - api
 
+  middleware:
+    build: ./Middleware
+    ports:
+      - "8081:8081"
+    networks:
+      - redMVC
+    depends_on:
+      - api
 
   db:
     build: ./Postgres
@@ -27,7 +35,7 @@ services:
     networks:
       - redMVC
     depends_on:
-      - api
+      - middleware
 
 
 networks:
