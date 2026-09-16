@@ -8,52 +8,38 @@ import (
 	"strings"
 )
 
-const backendURL = "http://api:8080"
-
-// const usersURL = "http://users:8080"
-// const authURL = "http://auth:8080"
-// const bookingsURL = "http://bookings:8080"
-// const officesURL = "http://offices:8080"
+const authLBURL = "http://authlb:8080"
+const logsLBURL = "http://logslb:8080"
+const usersLBURL = "http://userslb:8080"
 
 func routeTarget(path string) string {
 	switch {
+	case strings.HasPrefix(path, "/auth"):
+		after, _ := strings.CutPrefix(path, "/auth")
+		return (authLBURL + after)
+	case strings.HasPrefix(path, "/logs"):
+		after, _ := strings.CutPrefix(path, "/logs")
+		return (logsLBURL + after)
 	case strings.HasPrefix(path, "/users"):
-		return backendURL
-		//return usersURL
-	case path == "/login", path == "/register", path == "/update", strings.HasPrefix(path, "/delete"):
-		return backendURL
-		//return authURL
-	case strings.HasPrefix(path, "/offices"):
-		return backendURL
-		//return officesURL
-	case strings.HasPrefix(path, "/bookings"):
-		return backendURL
-		//return bookingsURL
+		after, _ := strings.CutPrefix(path, "/users")
+		return (usersLBURL + after)
 	default:
-		return backendURL
-		//return backendURL
+		return ""
 	}
 }
 
 func redirectHandler(w http.ResponseWriter, r *http.Request) {
 	target := routeTarget(r.URL.Path)
-	forwardURL := target + r.URL.Path
-	if r.URL.RawQuery != "" {
-		forwardURL += "?" + r.URL.RawQuery
+	if target == "" {
+		http.Error(w, "No target service found for this path", http.StatusNotFound)
+		return
 	}
 
-	forwardReq, err := http.NewRequest(r.Method, forwardURL, r.Body)
+	forwardReq, err := http.NewRequest(r.Method, target, r.Body)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to build upstream request: %v", err), http.StatusBadGateway)
 		return
 	}
-	forwardReq.Header = make(http.Header)
-	for key, values := range r.Header {
-		for _, value := range values {
-			forwardReq.Header.Add(key, value)
-		}
-	}
-	forwardReq.Host = "api"
 
 	resp, err := http.DefaultClient.Do(forwardReq)
 	if err != nil {
@@ -74,12 +60,26 @@ func redirectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// definir CORS para permitir solicitudes desde el frontend
+func enableCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", redirectHandler)
 
-	log.Println("Middleware running on :8081")
-	if err := http.ListenAndServe(":8081", mux); err != nil {
+	log.Println("Middleware running on :80")
+	if err := http.ListenAndServe(":80", enableCORS(mux)); err != nil {
 		log.Fatal(err)
 	}
 }
