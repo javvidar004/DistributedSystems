@@ -1,0 +1,161 @@
+services:
+  
+  frontend:
+    build: ./frontend/
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:80
+  
+  
+  middleware:
+    build: ./Middleware/
+    ports:
+      - "8080:80"
+
+  authlb:
+    build: ./loadbalancer/
+    ports:
+      - "8000:8080"
+    environment:
+      - INSTANCE_ID=authLB
+
+  logslb:
+    build: ./loadbalancer/
+    ports:
+      - "8001:8080"
+    environment:
+      - INSTANCE_ID=logsLB
+
+  userslb:
+    build: ./loadbalancer/
+    ports:
+      - "8002:8080"
+    environment:
+      - INSTANCE_ID=usersLB
+
+  db:
+    build: ./DB/
+    ports:
+      - "5432:5432"
+
+  authbe1:
+    build: ./auth/
+    ports:
+      - "8003:8080"
+    environment:
+      - INSTANCE_ID=authBE1
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=mysecretpassword
+      - DB_NAME=rbacdb
+      - LB_HOST=authlb
+
+  authbe2:
+    build: ./auth/
+    ports:
+      - "8004:8080"
+    environment:
+      - INSTANCE_ID=authBE2
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=mysecretpassword
+      - DB_NAME=rbacdb
+      - LB_HOST=authlb
+
+  authbe3:
+    build: ./auth/
+    ports:
+      - "8005:8080"
+    environment:
+      - INSTANCE_ID=authBE3
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=mysecretpassword
+      - DB_NAME=rbacdb
+      - LB_HOST=authlb
+
+  logsbe1:
+    build: ./logs/
+    ports:
+      - "8006:8080"
+    environment:
+      - INSTANCE_ID=logsBE1
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=mysecretpassword
+      - DB_NAME=rbacdb
+      - LB_HOST=logslb
+
+  logsbe2:
+    build: ./logs/
+    ports:
+      - "8007:8080"
+    environment:
+      - INSTANCE_ID=logsBE2
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=mysecretpassword
+      - DB_NAME=rbacdb
+      - LB_HOST=logslb
+
+  logsbe3:
+    build: ./logs/
+    ports:
+      - "8008:8080"
+    environment:
+      - INSTANCE_ID=logsBE3
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=mysecretpassword
+      - DB_NAME=rbacdb
+      - LB_HOST=logslb
+
+  usersbe1:
+    build: ./users/
+    ports:
+      - "8009:8080"
+    environment:
+      - INSTANCE_ID=usersBE1
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=mysecretpassword
+      - DB_NAME=rbacdb
+      - LB_HOST=userslb
+
+  usersbe2:
+    build: ./users/
+    ports:
+      - "8010:8080"
+    environment:
+      - INSTANCE_ID=usersBE2
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=mysecretpassword
+      - DB_NAME=rbacdb
+      - LB_HOST=userslb
+
+  usersbe3:
+    build: ./users/
+    ports:
+      - "8011:8080"
+    environment:
+      - INSTANCE_ID=usersBE3
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=mysecretpassword
+      - DB_NAME=rbacdb
+      - LB_HOST=userslb
+
+  
+
+  
