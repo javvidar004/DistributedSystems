@@ -126,7 +126,7 @@ func GetUserHandler(db *gorm.DB) gin.HandlerFunc {
 func GetUsersHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var users []models.User
-		result := db.Select("email", "name", "last_name", "work_position", "salary").Find(&users)
+		result := db.Select("id", "email", "name", "last_name", "work_position", "salary").Find(&users)
 		//user := models.User{}
 		//result := db.Select("email", "name", "last_name", "work_position", "salary").Find(&user)
 		if result.Error != nil {
