@@ -28,14 +28,6 @@ const QuickActions = () => {
           <p className="text-base opacity-90">Create new users for the system.</p>
         </div>
       </Link>
-
-      <Link href="/search" className="p-8 bg-yellow-600 text-white rounded-lg shadow-lg hover:bg-yellow-700 transition-colors flex items-center gap-6">
-        <MagnifyingGlassIcon className="h-10 w-10" />
-        <div>
-          <h2 className="font-bold text-2xl">Search Users</h2>
-          <p className="text-base opacity-90">Search and filter users.</p>
-        </div>
-      </Link>
     </div>
   );
 };

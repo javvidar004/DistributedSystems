@@ -4,8 +4,8 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  lastName: string;
-  workPosition: string;
+  last_name: string;
+  work_position: string;
   salary: number;
   createdAt?: string;
   updatedAt?: string;
@@ -36,6 +36,7 @@ export interface CreateUserRequest {
   lastName: string;
   workPosition: string;
   salary: number;
+  password: string;
 }
 
 export interface UpdateUserRequest {

@@ -71,7 +71,7 @@ func main() {
 	router.POST("/login", controllers.WithInstanceHeader(controllers.LoginHandler(db)))
 	router.POST("/register", controllers.WithInstanceHeader(controllers.RegisterHandler(db)))
 	router.PUT("/update", controllers.WithInstanceHeader(controllers.UpdatePasswordHandler(db)))
-	router.DELETE("/delete/:username", controllers.WithInstanceHeader(controllers.DeleteUserHandler(db)))
+	router.DELETE("/delete/:userID", controllers.WithInstanceHeader(controllers.DeleteUserHandler(db)))
 	router.GET("/heartbeat", controllers.WithInstanceHeader(controllers.HeartbeatHandler()))
 
 	if err := router.Run(":8080"); err != nil {

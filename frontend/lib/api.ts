@@ -23,7 +23,7 @@ const apiClient = axios.create({
 });
 
 type BackendUserResponse = AuthResponse | { user: User };
-type BackendUsersResponse = UserResponse;
+type BackendUsersResponse = {users: User[]} | UserResponse;
 type BackendLogsResponse = { logs: LogEntry[] };
 
 const getStoredUserId = () => {
@@ -112,8 +112,8 @@ export const getUserData = async (): Promise<User> => {
 export const getUsers = async (): Promise<User[]> => {
     const response = await apiClient.get<BackendUsersResponse>('/users/users');
 
-    if (Array.isArray(response.data.user)) {
-        return response.data.user;
+    if (Array.isArray(response.data.users)) {
+        return response.data.users;
     }
 
     if (response.data.user) {
@@ -124,12 +124,13 @@ export const getUsers = async (): Promise<User[]> => {
 };
 
 export const createUser = async (payload: CreateUserRequest): Promise<User> => {
-    const response = await apiClient.post<UserResponse>('/auth/user', {
+    const response = await apiClient.post<UserResponse>('/auth/register', {
         email: payload.email,
         name: payload.name,
         last_name: payload.lastName,
         work_position: payload.workPosition,
         salary: payload.salary,
+        password: payload.password,
     });
     const user = response.data.user;
 

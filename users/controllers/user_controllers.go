@@ -1,9 +1,13 @@
 package controllers
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -46,12 +50,14 @@ func UpdateUserHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var payload conectors.UpdateUserRequest
 		if err := c.ShouldBindJSON(&payload); err != nil {
+			newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "update_user", "failed")
 			c.JSON(http.StatusBadRequest, gin.H{"message": "invalid user payload"})
 			return
 		}
 
 		user, err := getUserByEmail(db, payload.Email)
 		if err != nil {
+			newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "update_user", "failed")
 			c.JSON(http.StatusNotFound, gin.H{"message": "user not found"})
 			return
 		}
@@ -61,10 +67,12 @@ func UpdateUserHandler(db *gorm.DB) gin.HandlerFunc {
 		user.WorkPosition = payload.WorkPosition
 		user.Salary = payload.Salary
 		if err := db.Save(&user).Error; err != nil {
+			newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "update_user", "failed")
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "could not update user", "error": err.Error()})
 			return
 		}
 
+		newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "update_user", "success")
 		c.JSON(http.StatusOK, gin.H{"message": "user updated successfully", "user": user})
 	}
 }
@@ -117,14 +125,16 @@ func GetUserHandler(db *gorm.DB) gin.HandlerFunc {
 
 func GetUsersHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		user := models.User{}
-		result := db.Select("email", "name", "last_name", "work_position", "salary").Find(&user)
+		var users []models.User
+		result := db.Select("id", "email", "name", "last_name", "work_position", "salary").Find(&users)
+		//user := models.User{}
+		//result := db.Select("email", "name", "last_name", "work_position", "salary").Find(&user)
 		if result.Error != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "could not get users"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"message": "user found successfully", "user": user})
+		c.JSON(http.StatusOK, gin.H{"users": users}) //gin.H{"message": "users found successfully", "users": users})
 	}
 }
 
@@ -167,4 +177,40 @@ func HeartbeatHandler() gin.HandlerFunc {
 		instanceID := os.Getenv("INSTANCE_ID")
 		c.JSON(http.StatusOK, gin.H{"message": "heartbeat received", "instanceID": instanceID})
 	}
+}
+
+func newLogRequest(timestamp, username, action, status string) {
+
+	body := conectors.NewLogRequest{
+		Timestamp: timestamp,
+		Username:  username,
+		Action:    action,
+		Status:    status,
+	}
+
+	// Send request to LogLB service
+	url := "http://" + os.Getenv("LOG_LB_HOST") + ":8080/log"
+
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		log.Printf("Error marshalling log request: %v", err)
+		return
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		log.Printf("Error creating log request: %v", err)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("Error sending log request: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
 }

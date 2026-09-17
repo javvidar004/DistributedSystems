@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { PlusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/solid';
-import RecipeList from '@/components/recipes/RecipeList';
+import { PlusIcon } from '@heroicons/react/24/solid';
+import UserTable from '@/components/users/UserTable';
 import { getUsers } from '@/lib/api';
 import { User } from '@/types';
 
@@ -34,13 +34,6 @@ export default function UsersPage() {
             <PlusIcon className="h-5 w-5" />
             <span>New User</span>
           </Link>
-          <Link 
-            href="/search"
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-500 transition-colors shadow-md"
-          >
-            <MagnifyingGlassIcon className="h-5 w-5" />
-            <span>Search</span>
-          </Link>
         </div>
       </div>
 
@@ -50,7 +43,7 @@ export default function UsersPage() {
       ) : isError ? (
         <p className="text-red-600">Could not load users.</p>
       ) : (
-        <RecipeList recipes={allUsers ?? []} />
+        <UserTable users={allUsers ?? []} />
       )}
     </div>
   );

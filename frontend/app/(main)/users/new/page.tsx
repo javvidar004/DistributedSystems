@@ -27,6 +27,7 @@ export default function CreateUserPage() {
         email: (form.get('email') as string) || '',
         workPosition: (form.get('workPosition') as string) || '',
         salary: Number(form.get('salary') || 0),
+        password: (form.get('password') as string) || '',
       };
 
       if (!payload.email || !payload.name || !payload.lastName || !payload.workPosition) {

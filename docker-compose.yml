@@ -51,6 +51,7 @@ services:
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
       - LB_HOST=authlb
+      - LOG_LB_HOST=logslb
 
   authbe2:
     build: ./auth/
@@ -64,6 +65,7 @@ services:
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
       - LB_HOST=authlb
+      - LOG_LB_HOST=logslb
 
   authbe3:
     build: ./auth/
@@ -77,6 +79,7 @@ services:
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
       - LB_HOST=authlb
+      - LOG_LB_HOST=logslb
 
   logsbe1:
     build: ./logs/
@@ -129,6 +132,7 @@ services:
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
       - LB_HOST=userslb
+      - LOG_LB_HOST=logslb
 
   usersbe2:
     build: ./users/
@@ -142,6 +146,7 @@ services:
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
       - LB_HOST=userslb
+      - LOG_LB_HOST=logslb
 
   usersbe3:
     build: ./users/
@@ -155,6 +160,7 @@ services:
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
       - LB_HOST=userslb
+      - LOG_LB_HOST=logslb
 
   
 
