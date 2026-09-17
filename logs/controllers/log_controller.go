@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"proyecto.com/m/conectors"
@@ -31,6 +32,7 @@ func NewLogHandler(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		log := models.Log{
+			ID:        uuid.New().String(),
 			Timestamp: payload.Timestamp,
 			Username:  payload.Username,
 			Action:    payload.Action,

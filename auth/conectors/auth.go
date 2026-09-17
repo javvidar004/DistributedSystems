@@ -19,3 +19,10 @@ type UpdatePasswordRequest struct {
 	NewPassword string `json:"new_password"`
 	OldPassword string `json:"old_password"`
 }
+
+type NewLogRequest struct {
+	Timestamp string `json:"timestamp"`
+	Username  string `json:"username"`
+	Action    string `json:"action"`
+	Status    string `json:"status"`
+}
