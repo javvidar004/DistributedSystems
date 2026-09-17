@@ -33,7 +33,7 @@ export default function AuthLayout({
       >
         <Providers>
         <main className="bg-background min-h-screen flex items-center justify-center">
-          <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
+          <div className="w-full max-w-lg p-8 space-y-6 bg-white rounded-lg shadow-md">
             {children}
           </div>
         </main>

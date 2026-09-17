@@ -124,12 +124,13 @@ export const getUsers = async (): Promise<User[]> => {
 };
 
 export const createUser = async (payload: CreateUserRequest): Promise<User> => {
-    const response = await apiClient.post<UserResponse>('/auth/user', {
+    const response = await apiClient.post<UserResponse>('/auth/register', {
         email: payload.email,
         name: payload.name,
         last_name: payload.lastName,
         work_position: payload.workPosition,
         salary: payload.salary,
+        password: payload.password,
     });
     const user = response.data.user;
 

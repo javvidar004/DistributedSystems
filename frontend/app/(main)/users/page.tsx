@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { PlusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/solid';
-import RecipeList from '@/components/recipes/RecipeList';
+import RecipeList from '@/components/users/UsersList';
 import { getUsers } from '@/lib/api';
 import { User } from '@/types';
 

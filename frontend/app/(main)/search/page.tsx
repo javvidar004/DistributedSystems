@@ -6,7 +6,7 @@ import { User } from '@/types';
 import { useQuery } from '@tanstack/react-query'; 
 import { getUsers } from '@/lib/api';
 import SearchBar from '@/components/search/SearchBar';
-import RecipeList from '@/components/recipes/RecipeList'; // Reutilizamos el componente de la lista
+import RecipeList from '@/components/users/UsersList'; // Reutilizamos el componente de la lista
 
 /**
  * Página de búsqueda de usuarios.

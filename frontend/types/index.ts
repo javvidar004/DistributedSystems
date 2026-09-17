@@ -36,6 +36,7 @@ export interface CreateUserRequest {
   lastName: string;
   workPosition: string;
   salary: number;
+  password: string;
 }
 
 export interface UpdateUserRequest {
