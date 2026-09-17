@@ -23,7 +23,6 @@ const navItems = [
   { href: '/dashboard', label: 'Home', icon: HomeIcon },
   { href: '/logs', label: 'Logs', icon: ShoppingCartIcon },
   { href: '/users', label: 'Users', icon: BookOpenIcon },
-  { href: '/search', label: 'Search', icon: MagnifyingGlassIcon },
 ];
 
 /**
