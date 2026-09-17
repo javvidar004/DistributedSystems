@@ -23,7 +23,7 @@ const apiClient = axios.create({
 });
 
 type BackendUserResponse = AuthResponse | { user: User };
-type BackendUsersResponse = UserResponse;
+type BackendUsersResponse = {users: User[]} | UserResponse;
 type BackendLogsResponse = { logs: LogEntry[] };
 
 const getStoredUserId = () => {
@@ -112,8 +112,8 @@ export const getUserData = async (): Promise<User> => {
 export const getUsers = async (): Promise<User[]> => {
     const response = await apiClient.get<BackendUsersResponse>('/users/users');
 
-    if (Array.isArray(response.data.user)) {
-        return response.data.user;
+    if (Array.isArray(response.data.users)) {
+        return response.data.users;
     }
 
     if (response.data.user) {
