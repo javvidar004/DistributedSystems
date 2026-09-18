@@ -9,10 +9,18 @@
  - Logs service
 
 ## Arquitecture (Docker compose)
+  
+ - Frontend
+ - Middleware
+ - userslb - usersservice(x3)
+ - logslb - logsservice(x3)
+ - authlb  - authservice(x3)
+ - db
 
-                         - authlb  - authservice(x3)
- - Frontend - Middleware - userslb - usersservice(x3) - db
-                         -  logslb - logsservice(x3)
+## How to execute the project
+ ```sh
+git clone 
+```
 
 
 Need to separate db and add requests between services
