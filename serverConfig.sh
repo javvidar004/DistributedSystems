@@ -26,5 +26,20 @@ echo "Starting Docker service..."
 systemctl start docker
 systemctl enable docker
 
+
+# Solicitar IP de la máquina al usuario
+read -r -p "Ingresa la IP del servidor: " SERVER_IP
+
+# Validar que no se ingrese una IP en blanco
+while [ -z "$SERVER_IP" ]; do
+  echo "La IP no puede estar vacía."
+  read -r -p "Ingresa la IP del servidor: " SERVER_IP
+done
+
+# Generar archivo .env
+echo "API_HOST=http://${SERVER_IP}:8080" > .env
+echo "Archivo .env creado correctamente:"
+cat .env
+
 echo "Starting Docker Compose..."
 docker compose up -d
