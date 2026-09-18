@@ -36,5 +36,17 @@ chmod 700 serverConfig.sh
 ./serverConfig.sh
 ```
 
+## Structure Breakdown
+
+### Middleware
+Middleware uses a defined list of endpoints depending on the prefix of the path of the request. Is is defined:
+- /auth/
+- /users/
+- /logs/
+
+Serves the server as on port 80, but on the docker compose 8080. This server uses a multiplexer: ServeMux. This permits recibing the requests and redirect them to the correct loadbalancer.  
+
+### Load balancer
+
 
 
