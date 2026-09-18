@@ -17,6 +17,12 @@
  - authlb  - authservice(x3)
  - db
 
+| Front layer  | Middleware    | LB's    |  Backend    | DB  |
+| ------------ |:-------------:| -----:  | ----------- | --- |
+|              |               | userslb | usersbe (x3)|     |
+| Frontend     | middleware    | authlb  | authbe (x3) | db  |
+|              |               | logslb  | logsbe (x3) |     |
+
 ## How to execute the project
 ### Prerequisites
  - Git
