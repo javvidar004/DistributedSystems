@@ -19,7 +19,10 @@
 
 ## How to execute the project
  ```sh
-git clone 
+git clone https://github.com/javvidar004/DistributedSystems.git
+sudo su
+chmod 700 serverConfig.sh
+./serverConfig.sh
 ```
 
 
