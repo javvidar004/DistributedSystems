@@ -18,6 +18,10 @@
  - db
 
 ## How to execute the project
+### Prerequisites
+ - Git
+ - Apt package manager
+
  ```sh
 git clone https://github.com/javvidar004/DistributedSystems.git
 cd DistributedSystems/
@@ -27,4 +31,4 @@ chmod 700 serverConfig.sh
 ```
 
 
-Need to separate db and add requests between services
+
