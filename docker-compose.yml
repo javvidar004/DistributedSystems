@@ -5,34 +5,23 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=${API_HOST}
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
   
   
   middleware:
-    build: ./Middleware/
+    build: ./Gateway/
     ports:
-      - "8080:80"
-
-  authlb:
-    build: ./loadbalancer/
-    ports:
-      - "8000:8080"
-    environment:
-      - INSTANCE_ID=authLB
-
-  logslb:
-    build: ./loadbalancer/
-    ports:
-      - "8001:8080"
-    environment:
-      - INSTANCE_ID=logsLB
-
-  userslb:
-    build: ./loadbalancer/
-    ports:
-      - "8002:8080"
-    environment:
-      - INSTANCE_ID=usersLB
+      - "8080:8080"
+    depends_on:
+      - authbe1
+      - authbe2
+      - authbe3
+      - logsbe1
+      - logsbe2
+      - logsbe3
+      - usersbe1
+      - usersbe2
+      - usersbe3
 
   db:
     build: ./DB/
@@ -50,8 +39,7 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
-      - LB_HOST=authlb
-      - LOG_LB_HOST=logslb
+      - MIDDLEWARE_HOST=middleware
 
   authbe2:
     build: ./auth/
@@ -64,9 +52,7 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
-      - LB_HOST=authlb
-      - LOG_LB_HOST=logslb
-
+      - MIDDLEWARE_HOST=middleware
   authbe3:
     build: ./auth/
     ports:
@@ -78,9 +64,7 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
-      - LB_HOST=authlb
-      - LOG_LB_HOST=logslb
-
+      - MIDDLEWARE_HOST=middleware
   logsbe1:
     build: ./logs/
     ports:
@@ -92,7 +76,8 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
-      - LB_HOST=logslb
+      - MIDDLEWARE_HOST=middleware
+
 
   logsbe2:
     build: ./logs/
@@ -105,7 +90,7 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
-      - LB_HOST=logslb
+      - MIDDLEWARE_HOST=middleware
 
   logsbe3:
     build: ./logs/
@@ -118,7 +103,7 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
-      - LB_HOST=logslb
+      - MIDDLEWARE_HOST=middleware
 
   usersbe1:
     build: ./users/
@@ -131,8 +116,7 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
-      - LB_HOST=userslb
-      - LOG_LB_HOST=logslb
+      - MIDDLEWARE_HOST=middleware
 
   usersbe2:
     build: ./users/
@@ -145,8 +129,7 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
-      - LB_HOST=userslb
-      - LOG_LB_HOST=logslb
+      - MIDDLEWARE_HOST=middleware
 
   usersbe3:
     build: ./users/
@@ -159,8 +142,7 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
-      - LB_HOST=userslb
-      - LOG_LB_HOST=logslb
+      - MIDDLEWARE_HOST=middleware
 
   
 

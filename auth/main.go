@@ -25,13 +25,13 @@ func HeartbeatRequest(lbHost string, instanceID string) {
 			resp, err := http.Get(url)
 			if err != nil {
 				log.Printf("Error checking heartbeat for %s: %v", lbHost, err)
-				time.Sleep(20 * time.Second)
+				time.Sleep(60 * time.Second)
 				continue
 			}
 			if resp.StatusCode != http.StatusOK {
 				log.Printf("Backend %s is not alive", lbHost)
 			}
-			time.Sleep(20 * time.Second)
+			time.Sleep(60 * time.Second)
 		}
 	}()
 }
@@ -43,7 +43,7 @@ func main() {
 	user := os.Getenv("DB_USER")
 	password := os.Getenv("DB_PASSWORD")
 	name := os.Getenv("DB_NAME")
-	lbHost := os.Getenv("LB_HOST")
+	middlewareHost := os.Getenv("MIDDLEWARE_HOST")
 	instanceID := os.Getenv("INSTANCE_ID")
 
 	dsn := "host=" + host + " user=" + user + " password=" + password + " dbname=" + name + " port=" + port + " sslmode=disable TimeZone=America/Mexico_City"
@@ -66,7 +66,7 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	HeartbeatRequest(lbHost, instanceID)
+	HeartbeatRequest(middlewareHost, instanceID)
 
 	router.POST("/login", controllers.WithInstanceHeader(controllers.LoginHandler(db)))
 	router.POST("/register", controllers.WithInstanceHeader(controllers.RegisterHandler(db)))
