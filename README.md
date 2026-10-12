@@ -43,10 +43,14 @@ Middleware uses a defined list of endpoints depending on the prefix of the path 
 - /auth/
 - /users/
 - /logs/
+NOTE: It is important to have in mind that defining endpoints in Nginx the definition of the location ends in "/" and after the instruction of "proxy_pass http://backend_pool/" also has to end in an "/" this way we ensure that the request sent to the backend does not sends the prefix, this one just helps know to which type of backend it is send the request but the location of the backend is after each of the 3 prefix listed before.  
 
-Serves the server as on port 80, but on the docker compose 8080. This server uses a multiplexer: ServeMux. This permits recibing the requests and redirect them to the correct loadbalancer.  
+For the function of LB, it is defined and upstream pool for each of the types of backends. This way we ensure all 3 copies of the backend are used by the Middleware.  
+  
+IMPORTANT: The container of the middleware should be the last one to be up, this because it checks that all backends defined on the config file are up, if any of the backends is down the server will exit with code 1.
 
-### Load balancer
+
+
 
 
 
