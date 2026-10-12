@@ -189,7 +189,7 @@ func newLogRequest(timestamp, username, action, status string) {
 	}
 
 	// Send request to LogLB service
-	url := "http://" + os.Getenv("LOG_LB_HOST") + ":8080/log"
+	url := "http://" + os.Getenv("MIDDLEWARE_HOST") + ":8080/logs/log"
 
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
