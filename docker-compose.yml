@@ -1,5 +1,12 @@
 services:
   
+  consul:
+    image: hashicorp/consul:latest
+    container_name: consul
+    command: "agent -dev -client=0.0.0.0"
+    ports:
+      - "8500:8500"
+
   frontend:
     build: ./frontend/
     ports:
@@ -13,6 +20,7 @@ services:
     ports:
       - "8080:8080"
     depends_on:
+      - db
       - authbe1
       - authbe2
       - authbe3
@@ -33,116 +41,153 @@ services:
     ports:
       - "8003:8080"
     environment:
-      - INSTANCE_ID=authBE1
+      - INSTANCE_ID=authbe1
       - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
       - MIDDLEWARE_HOST=middleware
+      - CONSUL_HTTP_ADDR=http://consul:8500
+    depends_on:
+      - db
+      - consul
 
   authbe2:
     build: ./auth/
     ports:
       - "8004:8080"
     environment:
-      - INSTANCE_ID=authBE2
+      - INSTANCE_ID=authbe2
       - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
       - MIDDLEWARE_HOST=middleware
+      - CONSUL_HTTP_ADDR=http://consul:8500
+    depends_on:
+      - db
+      - consul
+
   authbe3:
     build: ./auth/
     ports:
       - "8005:8080"
     environment:
-      - INSTANCE_ID=authBE3
+      - INSTANCE_ID=authbe3
       - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
       - MIDDLEWARE_HOST=middleware
+      - CONSUL_HTTP_ADDR=http://consul:8500
+    depends_on:
+      - db
+      - consul
+
   logsbe1:
     build: ./logs/
     ports:
       - "8006:8080"
     environment:
-      - INSTANCE_ID=logsBE1
+      - INSTANCE_ID=logsbe1
       - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
       - MIDDLEWARE_HOST=middleware
-
+      - CONSUL_HTTP_ADDR=http://consul:8500
+    depends_on:
+      - db
+      - consul
 
   logsbe2:
     build: ./logs/
     ports:
       - "8007:8080"
     environment:
-      - INSTANCE_ID=logsBE2
+      - INSTANCE_ID=logsbe2
       - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
       - MIDDLEWARE_HOST=middleware
+      - CONSUL_HTTP_ADDR=http://consul:8500
+    depends_on:
+      - db
+      - consul
 
   logsbe3:
     build: ./logs/
     ports:
       - "8008:8080"
     environment:
-      - INSTANCE_ID=logsBE3
+      - INSTANCE_ID=logsbe3
       - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
       - MIDDLEWARE_HOST=middleware
+      - CONSUL_HTTP_ADDR=http://consul:8500
+    depends_on:
+      - db
+      - consul
 
   usersbe1:
     build: ./users/
     ports:
       - "8009:8080"
     environment:
-      - INSTANCE_ID=usersBE1
+      - INSTANCE_ID=usersbe1
       - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
       - MIDDLEWARE_HOST=middleware
+      - CONSUL_HTTP_ADDR=http://consul:8500
+    depends_on:
+      - db
+      - consul
 
   usersbe2:
     build: ./users/
     ports:
       - "8010:8080"
     environment:
-      - INSTANCE_ID=usersBE2
+      - INSTANCE_ID=usersbe2
       - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
       - MIDDLEWARE_HOST=middleware
+      - CONSUL_HTTP_ADDR=http://consul:8500
+    depends_on:
+      - db
+      - consul
 
   usersbe3:
     build: ./users/
     ports:
       - "8011:8080"
     environment:
-      - INSTANCE_ID=usersBE3
+      - INSTANCE_ID=usersbe3
       - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
       - DB_NAME=rbacdb
       - MIDDLEWARE_HOST=middleware
+      - CONSUL_HTTP_ADDR=http://consul:8500
+    depends_on:
+      - db
+      - consul
 
   
 
