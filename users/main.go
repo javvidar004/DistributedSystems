@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -46,6 +49,16 @@ func main() {
 	middlewareHost := os.Getenv("MIDDLEWARE_HOST")
 	instanceID := os.Getenv("INSTANCE_ID")
 
+	consulAddr := os.Getenv("CONSUL_HTTP_ADDR")
+
+	if err := controllers.RegisterWithConsul(consulAddr, instanceID); err != nil {
+		// Non-fatal: the service still runs and serves requests, it just
+		// won't be discoverable via Consul until this succeeds. Logged
+		// loudly because silently running "invisible" is a confusing
+		// failure mode.
+		log.Printf("WARNING: %v", err)
+	}
+
 	dsn := "host=" + host + " user=" + user + " password=" + password + " dbname=" + name + " port=" + port + " sslmode=disable TimeZone=America/Mexico_City"
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
@@ -74,6 +87,22 @@ func main() {
 	router.GET("/user/:userID", controllers.WithInstanceHeader(controllers.GetUserHandler(db)))
 	router.GET("/users", controllers.WithInstanceHeader(controllers.GetUsersHandler(db)))
 	router.GET("/heartbeat", controllers.WithInstanceHeader(controllers.HeartbeatHandler()))
+
+	srv := &http.Server{
+		Addr:    ":8080",
+		Handler: router,
+	}
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		log.Printf("shutting down %s", instanceID)
+		controllers.DeregisterFromConsul(consulAddr, instanceID)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		srv.Shutdown(ctx)
+	}()
 
 	if err := router.Run(":8080"); err != nil {
 		log.Fatal("Failed to start server:", err)
