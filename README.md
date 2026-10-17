@@ -42,7 +42,8 @@ chmod 700 serverConfig.sh
 Middleware uses a defined list of endpoints depending on the prefix of the path of the request. Is is defined:
 - /auth/
 - /users/
-- /logs/  
+- /logs/
+
 NOTE: It is important to have in mind that defining endpoints in Nginx the definition of the location ends in "/" and after the instruction of "proxy_pass http://backend_pool/" also has to end in an "/" this way we ensure that the request sent to the backend does not sends the prefix, this one just helps know to which type of backend it is send the request but the location of the backend is after each of the 3 prefix listed before.  
 
 For the function of LB, it is defined and upstream pool for each of the types of backends. This way we ensure all 3 copies of the backend are used by the Middleware.  
