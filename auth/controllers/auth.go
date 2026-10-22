@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,11 +14,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
 	"proyecto.com/m/conectors"
 	"proyecto.com/m/models"
+	"proyecto.com/m/pb"
 )
 
 func LoginHandler(db *gorm.DB) gin.HandlerFunc {
@@ -219,6 +223,43 @@ func WithInstanceHeader(next gin.HandlerFunc) gin.HandlerFunc {
 }
 
 func newLogRequest(timestamp, username, action, status string) {
+	if err := newLogRequestGRPC(timestamp, username, action, status); err == nil {
+		return
+	}
+
+	newLogRequestHTTP(timestamp, username, action, status)
+}
+
+func newLogRequestGRPC(timestamp, username, action, status string) error {
+	addr := os.Getenv("LOGS_GRPC_ADDR")
+	if addr == "" {
+		addr = "logsbe1:9090"
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	client := pb.NewLogServiceClient(conn)
+	_, err = client.CreateLog(ctx, &pb.CreateLogRequest{
+		ServiceName: "auth",
+		Action:      action,
+		UserId:      username,
+		Details:     "status=" + status + ";timestamp=" + timestamp,
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func newLogRequestHTTP(timestamp, username, action, status string) {
 
 	body := conectors.NewLogRequest{
 		Timestamp: timestamp,

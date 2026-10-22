@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,11 +12,13 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"google.golang.org/grpc"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
 	"proyecto.com/m/controllers"
 	"proyecto.com/m/models"
+	"proyecto.com/m/pb"
 )
 
 func HeartbeatRequest(lbHost string, instanceID string) {
@@ -88,6 +91,26 @@ func main() {
 	router.GET("/users", controllers.WithInstanceHeader(controllers.GetUsersHandler(db)))
 	router.GET("/heartbeat", controllers.WithInstanceHeader(controllers.HeartbeatHandler()))
 
+	grpcPort := os.Getenv("GRPC_PORT")
+	if grpcPort == "" {
+		grpcPort = "9090"
+	}
+
+	grpcListener, err := net.Listen("tcp", ":"+grpcPort)
+	if err != nil {
+		log.Fatal("Failed to open gRPC listener:", err)
+	}
+
+	grpcServer := grpc.NewServer()
+	pb.RegisterUserServiceServer(grpcServer, controllers.NewUserGRPCServer(db))
+
+	go func() {
+		log.Printf("users gRPC listening on :%s", grpcPort)
+		if err := grpcServer.Serve(grpcListener); err != nil {
+			log.Printf("gRPC server stopped: %v", err)
+		}
+	}()
+
 	srv := &http.Server{
 		Addr:    ":8080",
 		Handler: router,
@@ -98,13 +121,14 @@ func main() {
 	go func() {
 		<-sigCh
 		log.Printf("shutting down %s", instanceID)
+		grpcServer.GracefulStop()
 		controllers.DeregisterFromConsul(consulAddr, instanceID)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		srv.Shutdown(ctx)
 	}()
 
-	if err := router.Run(":8080"); err != nil {
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal("Failed to start server:", err)
 	}
 }
