@@ -8,16 +8,16 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 
 	"proyecto.com/m/conectors"
-	"proyecto.com/m/models"
+	"proyecto.com/m/service"
 )
 
-func CreateUserHandler(db *gorm.DB) gin.HandlerFunc {
+func CreateUserHandler(usersSvc *service.UsersService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var payload conectors.CreateUserRequest
 		if err := c.ShouldBindJSON(&payload); err != nil {
@@ -25,29 +25,24 @@ func CreateUserHandler(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		if _, err := getUserByEmail(db, payload.Email); err == nil {
-			c.JSON(http.StatusConflict, gin.H{"message": "email already exists"})
-			return
-		}
-
-		user := models.User{
+		res, err := usersSvc.CreateUser(c.Request.Context(), service.CreateUserInput{
 			Email:        payload.Email,
 			Name:         payload.Name,
 			LastName:     payload.LastName,
 			WorkPosition: payload.WorkPosition,
 			Salary:       payload.Salary,
-		}
-
-		if err := db.Create(&user).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "could not create user", "error": err.Error()})
+		})
+		if err != nil {
+			statusCode, msg := mapHTTPError(err)
+			c.JSON(statusCode, gin.H{"message": msg})
 			return
 		}
 
-		c.JSON(http.StatusCreated, gin.H{"message": "user created successfully", "user": user})
+		c.JSON(http.StatusCreated, gin.H{"message": res.Message, "user": res.User})
 	}
 }
 
-func UpdateUserHandler(db *gorm.DB) gin.HandlerFunc {
+func UpdateUserHandler(usersSvc *service.UsersService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var payload conectors.UpdateUserRequest
 		if err := c.ShouldBindJSON(&payload); err != nil {
@@ -56,57 +51,46 @@ func UpdateUserHandler(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		user, err := getUserByEmail(db, payload.Email)
+		res, err := usersSvc.UpdateUser(c.Request.Context(), service.UpdateUserInput{
+			Email:        payload.Email,
+			Name:         payload.Name,
+			LastName:     payload.LastName,
+			WorkPosition: payload.WorkPosition,
+			Salary:       payload.Salary,
+		})
 		if err != nil {
-			newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "update_user", "failed")
-			c.JSON(http.StatusNotFound, gin.H{"message": "user not found"})
+			statusCode, msg := mapHTTPError(err)
+			c.JSON(statusCode, gin.H{"message": msg})
 			return
 		}
 
-		user.Name = payload.Name
-		user.LastName = payload.LastName
-		user.WorkPosition = payload.WorkPosition
-		user.Salary = payload.Salary
-		if err := db.Save(&user).Error; err != nil {
-			newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "update_user", "failed")
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "could not update user", "error": err.Error()})
-			return
-		}
-
-		newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "update_user", "success")
-		c.JSON(http.StatusOK, gin.H{"message": "user updated successfully", "user": user})
+		c.JSON(http.StatusOK, gin.H{"message": res.Message, "user": res.User})
 	}
 }
 
-func DeleteUserHandler(db *gorm.DB) gin.HandlerFunc {
+func DeleteUserHandler(usersSvc *service.UsersService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		username := c.Param("username")
-		if username == "" {
-			username = c.Query("username")
+		userID := c.Param("userID")
+		if userID == "" {
+			userID = c.Query("userID")
 		}
-		if username == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "username is required"})
-			return
-		}
-		if username == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "username is required"})
-			return
-		}
-		result := db.Where("username = ?", username).Delete(&models.User{})
-		if result.Error != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "could not delete user", "error": result.Error.Error()})
-			return
-		}
-		if result.RowsAffected == 0 {
-			c.JSON(http.StatusNotFound, gin.H{"message": "user not found"})
+		if userID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "userID is required"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"message": "user deleted successfully"})
+		res, err := usersSvc.DeleteUser(c.Request.Context(), userID)
+		if err != nil {
+			statusCode, msg := mapHTTPError(err)
+			c.JSON(statusCode, gin.H{"message": msg})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": res.Message})
 	}
 }
 
-func GetUserHandler(db *gorm.DB) gin.HandlerFunc {
+func GetUserHandler(usersSvc *service.UsersService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := c.Param("userID")
 		if userID == "" {
@@ -114,51 +98,45 @@ func GetUserHandler(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		user, err := getUserByID(db, userID)
+		res, err := usersSvc.GetUser(c.Request.Context(), userID)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"message": "user not found"})
+			statusCode, msg := mapHTTPError(err)
+			c.JSON(statusCode, gin.H{"message": msg})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"message": "user found successfully", "user": user})
+		c.JSON(http.StatusOK, gin.H{"message": res.Message, "user": res.User})
 	}
 }
 
-func GetUsersHandler(db *gorm.DB) gin.HandlerFunc {
+func GetUsersHandler(usersSvc *service.UsersService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var users []models.User
-		result := db.Select("id", "email", "name", "last_name", "work_position", "salary").Find(&users)
-		//user := models.User{}
-		//result := db.Select("email", "name", "last_name", "work_position", "salary").Find(&user)
-		if result.Error != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "could not get users"})
+		res, err := usersSvc.GetUsers(c.Request.Context())
+		if err != nil {
+			statusCode, msg := mapHTTPError(err)
+			c.JSON(statusCode, gin.H{"message": msg})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"users": users}) //gin.H{"message": "users found successfully", "users": users})
+		c.JSON(http.StatusOK, gin.H{"users": res.Users})
 	}
 }
 
-func getUserByID(db *gorm.DB, userID string) (models.User, error) {
-	var user models.User
-	if err := db.Where("id = ?", userID).First(&user).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return models.User{}, err
-		}
-		return models.User{}, err
+func mapHTTPError(err error) (int, string) {
+	if err == nil {
+		return http.StatusOK, ""
 	}
-	return user, nil
-}
 
-func getUserByEmail(db *gorm.DB, email string) (models.User, error) {
-	var user models.User
-	if err := db.Where("email = ?", email).First(&user).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return models.User{}, err
-		}
-		return models.User{}, err
+	switch {
+	case errors.Is(err, service.ErrRequiredFields):
+		return http.StatusBadRequest, "required fields are missing"
+	case errors.Is(err, service.ErrUserAlreadyExists):
+		return http.StatusConflict, "email already exists"
+	case errors.Is(err, service.ErrUserNotFound):
+		return http.StatusNotFound, "user not found"
+	default:
+		return http.StatusInternalServerError, "internal server error"
 	}
-	return user, nil
 }
 
 func WithInstanceHeader(next gin.HandlerFunc) gin.HandlerFunc {
@@ -217,58 +195,108 @@ func newLogRequest(timestamp, username, action, status string) {
 }
 
 func RegisterWithConsul(consulAddr string, instanceID string) error {
-	payload := map[string]any{
+	httpPort := 8080
+	if v := os.Getenv("HTTP_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			httpPort = p
+		}
+	}
+	grpcPort := 50051
+	if v := os.Getenv("GRPC_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			grpcPort = p
+		}
+	}
+
+	httpPayload := map[string]any{
 		"ID":      instanceID,
 		"Name":    "users-service",
 		"Address": instanceID, // resolvable via Docker's embedded DNS
-		"Port":    8080,
+		"Port":    httpPort,
 		"Check": map[string]any{
-			"HTTP":                           fmt.Sprintf("http://%s:8080/heartbeat", instanceID),
+			"HTTP":                           fmt.Sprintf("http://%s:%d/heartbeat", instanceID, httpPort),
 			"Interval":                       "5s",
 			"Timeout":                        "2s",
 			"DeregisterCriticalServiceAfter": "1m",
 		},
 	}
-	body, err := json.Marshal(payload)
+
+	grpcPayload := map[string]any{
+		"ID":      instanceID + "-grpc",
+		"Name":    "users-grpc-service",
+		"Address": instanceID,
+		"Port":    grpcPort,
+		"Check": map[string]any{
+			"TCP":                            fmt.Sprintf("%s:%d", instanceID, grpcPort),
+			"Interval":                       "5s",
+			"Timeout":                        "2s",
+			"DeregisterCriticalServiceAfter": "1m",
+		},
+	}
+
+	httpBody, err := json.Marshal(httpPayload)
+	if err != nil {
+		return err
+	}
+	grpcBody, err := json.Marshal(grpcPayload)
 	if err != nil {
 		return err
 	}
 
 	var lastErr error
-	for attempt := 1; attempt <= 10; attempt++ {
-		req, err := http.NewRequest(http.MethodPut, consulAddr+"/v1/agent/service/register", bytes.NewReader(body))
-		if err != nil {
-			return err
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := http.DefaultClient.Do(req)
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				log.Printf("registered %s with Consul at %s", instanceID, consulAddr)
-				return nil
-			}
-			lastErr = fmt.Errorf("consul returned status %d", resp.StatusCode)
-		} else {
-			lastErr = err
-		}
-		time.Sleep(time.Duration(attempt) * time.Second)
+	bodies := []struct {
+		body []byte
+		name string
+	}{
+		{body: httpBody, name: "http"},
+		{body: grpcBody, name: "grpc"},
 	}
-	return fmt.Errorf("giving up registering with consul: %w", lastErr)
+
+	for _, entry := range bodies {
+		registered := false
+		for attempt := 1; attempt <= 10; attempt++ {
+			req, err := http.NewRequest(http.MethodPut, consulAddr+"/v1/agent/service/register", bytes.NewReader(entry.body))
+			if err != nil {
+				return err
+			}
+			req.Header.Set("Content-Type", "application/json")
+
+			resp, err := http.DefaultClient.Do(req)
+			if err == nil {
+				resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					log.Printf("registered %s %s with Consul at %s", instanceID, entry.name, consulAddr)
+					registered = true
+					break
+				}
+				lastErr = fmt.Errorf("consul returned status %d", resp.StatusCode)
+			} else {
+				lastErr = err
+			}
+			time.Sleep(time.Duration(attempt) * time.Second)
+		}
+		if !registered {
+			return fmt.Errorf("giving up registering %s endpoint with consul: %w", entry.name, lastErr)
+		}
+	}
+
+	return nil
 }
 
 func DeregisterFromConsul(consulAddr string, instanceID string) {
-	req, err := http.NewRequest(http.MethodPut, consulAddr+"/v1/agent/service/deregister/"+instanceID, nil)
-	if err != nil {
-		log.Printf("failed to build deregister request: %v", err)
-		return
+	serviceIDs := []string{instanceID, instanceID + "-grpc"}
+	for _, svcID := range serviceIDs {
+		req, err := http.NewRequest(http.MethodPut, consulAddr+"/v1/agent/service/deregister/"+svcID, nil)
+		if err != nil {
+			log.Printf("failed to build deregister request for %s: %v", svcID, err)
+			continue
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			log.Printf("failed to deregister %s from consul: %v", svcID, err)
+			continue
+		}
+		resp.Body.Close()
+		log.Printf("deregistered %s from consul", svcID)
 	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		log.Printf("failed to deregister %s from consul: %v", instanceID, err)
-		return
-	}
-	resp.Body.Close()
-	log.Printf("deregistered %s from consul", instanceID)
 }

@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package users.v1;
+
+option go_package = "proyecto.com/m/pb;pb";
+
+service UsersService {
+  rpc CreateUser(CreateUserRequest) returns (UserResponse);
+  rpc UpdateUser(UpdateUserRequest) returns (UserResponse);
+  rpc DeleteUser(DeleteUserRequest) returns (MessageResponse);
+  rpc GetUser(GetUserRequest) returns (UserResponse);
+  rpc GetUsers(GetUsersRequest) returns (GetUsersResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
+
+message CreateUserRequest {
+  string email = 1;
+  string name = 2;
+  string last_name = 3;
+  string work_position = 4;
+  double salary = 5;
+}
+
+message UpdateUserRequest {
+  string email = 1;
+  string name = 2;
+  string last_name = 3;
+  string work_position = 4;
+  double salary = 5;
+}
+
+message DeleteUserRequest {
+  string user_id = 1;
+}
+
+message GetUserRequest {
+  string user_id = 1;
+}
+
+message GetUsersRequest {}
+message HeartbeatRequest {}
+
+message User {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  string last_name = 4;
+  string work_position = 5;
+  double salary = 6;
+  string created_at = 7;
+  string updated_at = 8;
+}
+
+message UserResponse {
+  string message = 1;
+  User user = 2;
+}
+
+message GetUsersResponse {
+  repeated User users = 1;
+}
+
+message MessageResponse {
+  string message = 1;
+}
+
+message HeartbeatResponse {
+  string message = 1;
+  string instance_id = 2;
+}
