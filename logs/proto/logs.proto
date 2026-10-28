@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package logs.v1;
+
+option go_package = "proyecto.com/m/pb;pb";
+
+service LogsService {
+  rpc GetLogs(GetLogsRequest) returns (GetLogsResponse);
+  rpc NewLog(NewLogRequest) returns (LogResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
+
+message GetLogsRequest {}
+message HeartbeatRequest {}
+
+message NewLogRequest {
+  string timestamp = 1;
+  string username = 2;
+  string action = 3;
+  string status = 4;
+}
+
+message Log {
+  string id = 1;
+  string timestamp = 2;
+  string username = 3;
+  string action = 4;
+  string status = 5;
+  string created_at = 6;
+}
+
+message GetLogsResponse {
+  repeated Log logs = 1;
+}
+
+message LogResponse {
+  string message = 1;
+  Log log = 2;
+}
+
+message HeartbeatResponse {
+  string message = 1;
+  string instance_id = 2;
+}
