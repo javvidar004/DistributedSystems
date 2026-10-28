@@ -2,25 +2,23 @@ package controllers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"strings"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 
 	"proyecto.com/m/conectors"
-	"proyecto.com/m/models"
+	"proyecto.com/m/service"
 )
 
-func LoginHandler(db *gorm.DB) gin.HandlerFunc {
+func LoginHandler(authSvc *service.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var payload conectors.LoginRequest
 		if err := c.ShouldBindJSON(&payload); err != nil {
@@ -29,30 +27,18 @@ func LoginHandler(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		user, err := getUserByUsername(db, payload.Email)
+		res, err := authSvc.Login(c.Request.Context(), payload.Email, payload.Password)
 		if err != nil {
-			newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "login", "failed")
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "invalid username or password"})
+			statusCode, msg := mapHTTPError(err)
+			c.JSON(statusCode, gin.H{"message": msg})
 			return
 		}
 
-		//if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(payload.Password)); err != nil {
-		//	c.JSON(http.StatusUnauthorized, gin.H{"message": "invalid username or password"})
-		//	return
-		//}
-
-		if user.PasswordHash != payload.Password {
-			newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "login", "failed")
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "invalid username or password"})
-			return
-		}
-
-		newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "login", "success")
-		c.JSON(http.StatusOK, gin.H{"message": "login successful", "user": user})
+		c.JSON(http.StatusOK, gin.H{"message": res.Message, "user": res.User})
 	}
 }
 
-func RegisterHandler(db *gorm.DB) gin.HandlerFunc {
+func RegisterHandler(authSvc *service.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var payload conectors.RegisterRequest
 		if err := c.ShouldBindJSON(&payload); err != nil {
@@ -61,53 +47,25 @@ func RegisterHandler(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		if payload.Email == "" || payload.Password == "" {
-			newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "register", "failed")
-			c.JSON(http.StatusBadRequest, gin.H{"message": "email and password are required"})
-			return
-		}
-
-		if _, err := getUserByUsername(db, payload.Email); err == nil {
-			newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "register", "failed")
-			c.JSON(http.StatusConflict, gin.H{"message": "username already exists"})
-			return
-		}
-
-		hash, err := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
-		if err != nil {
-			newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "register", "failed")
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "could not hash password", "error": err.Error()})
-			return
-		}
-
-		uuid, err := uuid.NewRandom()
-		if err != nil {
-			newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "register", "failed")
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "could not generate UUID", "error": err.Error()})
-			return
-		}
-
-		user := models.User{
-			ID:           uuid.String(),
+		res, err := authSvc.Register(c.Request.Context(), service.RegisterInput{
+			Name:         payload.Name,
+			LastName:     payload.LastName,
 			Email:        payload.Email,
-			PasswordHash: strings.TrimSpace(string(hash)),
-			IsActive:     true,
-			Role:         "user",
-			Group:        "default",
-		}
-
-		if err := db.Create(&user).Error; err != nil {
-			newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "register", "failed")
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "could not create user", "error": err.Error()})
+			WorkPosition: payload.WorkPosition,
+			Salary:       payload.Salary,
+			Password:     payload.Password,
+		})
+		if err != nil {
+			statusCode, msg := mapHTTPError(err)
+			c.JSON(statusCode, gin.H{"message": msg})
 			return
 		}
 
-		newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "register", "success")
-		c.JSON(http.StatusCreated, gin.H{"message": "user created successfully", "user": user})
+		c.JSON(http.StatusCreated, gin.H{"message": res.Message, "user": res.User})
 	}
 }
 
-func UpdatePasswordHandler(db *gorm.DB) gin.HandlerFunc {
+func UpdatePasswordHandler(authSvc *service.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var payload conectors.UpdatePasswordRequest
 		if err := c.ShouldBindJSON(&payload); err != nil {
@@ -116,75 +74,37 @@ func UpdatePasswordHandler(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		if payload.Email == "" || payload.NewPassword == "" {
-			newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "update_password", "failed")
-			c.JSON(http.StatusBadRequest, gin.H{"message": "email and new password are required"})
-			return
-		}
-
-		user, err := getUserByUsername(db, payload.Email)
+		res, err := authSvc.UpdatePassword(c.Request.Context(), payload.Email, payload.OldPassword, payload.NewPassword)
 		if err != nil {
-			newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "update_password", "failed")
-			c.JSON(http.StatusNotFound, gin.H{"message": "user not found"})
+			statusCode, msg := mapHTTPError(err)
+			c.JSON(statusCode, gin.H{"message": msg})
 			return
 		}
 
-		if user.PasswordHash != payload.OldPassword {
-			newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "update_password", "failed")
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "old password is incorrect"})
-			return
-		}
-
-		user.PasswordHash = payload.NewPassword
-		if err := db.Save(&user).Error; err != nil {
-			newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "update_password", "failed")
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "could not update password", "error": err.Error()})
-			return
-		}
-
-		newLogRequest(time.Now().Format(time.RFC3339), payload.Email, "update_password", "success")
-		c.JSON(http.StatusOK, gin.H{"message": "password updated successfully"})
+		c.JSON(http.StatusOK, gin.H{"message": res.Message})
 	}
 }
 
-func DeleteUserHandler(db *gorm.DB) gin.HandlerFunc {
+func DeleteUserHandler(authSvc *service.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := c.Param("userID")
 		if userID == "" {
 			userID = c.Query("userID")
 		}
 		if userID == "" {
-			newLogRequest(time.Now().Format(time.RFC3339), "", "delete_user", "failed")
 			c.JSON(http.StatusBadRequest, gin.H{"message": "userID is required"})
 			return
 		}
 
-		result := db.Where("id = ?", userID).Delete(&models.User{})
-		if result.Error != nil {
-			newLogRequest(time.Now().Format(time.RFC3339), userID, "delete_user", "failed")
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "could not delete user", "error": result.Error.Error()})
-			return
-		}
-		if result.RowsAffected == 0 {
-			newLogRequest(time.Now().Format(time.RFC3339), userID, "delete_user", "failed")
-			c.JSON(http.StatusNotFound, gin.H{"message": "user not found"})
+		res, err := authSvc.DeleteUser(c.Request.Context(), userID)
+		if err != nil {
+			statusCode, msg := mapHTTPError(err)
+			c.JSON(statusCode, gin.H{"message": msg})
 			return
 		}
 
-		newLogRequest(time.Now().Format(time.RFC3339), userID, "delete_user", "success")
-		c.JSON(http.StatusOK, gin.H{"message": "user deleted successfully"})
+		c.JSON(http.StatusOK, gin.H{"message": res.Message})
 	}
-}
-
-func getUserByUsername(db *gorm.DB, email string) (models.User, error) {
-	var user models.User
-	if err := db.Where("email = ?", email).First(&user).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return models.User{}, err
-		}
-		return models.User{}, err
-	}
-	return user, nil
 }
 
 //func withInstanceHeader(next http.HandlerFunc) http.HandlerFunc {
@@ -206,6 +126,29 @@ func HeartbeatHandler() gin.HandlerFunc {
 	}
 }
 
+func mapHTTPError(err error) (int, string) {
+	if err == nil {
+		return http.StatusOK, ""
+	}
+
+	switch {
+	case errors.Is(err, service.ErrInvalidPayload):
+		return http.StatusBadRequest, "invalid payload"
+	case errors.Is(err, service.ErrRequiredFields):
+		return http.StatusBadRequest, "email and password are required"
+	case errors.Is(err, service.ErrInvalidCredentials):
+		return http.StatusUnauthorized, "invalid username or password"
+	case errors.Is(err, service.ErrUserAlreadyExists):
+		return http.StatusConflict, "username already exists"
+	case errors.Is(err, service.ErrUserNotFound):
+		return http.StatusNotFound, "user not found"
+	case errors.Is(err, service.ErrOldPasswordMismatch):
+		return http.StatusUnauthorized, "old password is incorrect"
+	default:
+		return http.StatusInternalServerError, "internal server error"
+	}
+}
+
 func WithInstanceHeader(next gin.HandlerFunc) gin.HandlerFunc {
 
 	var instanceID string
@@ -216,6 +159,10 @@ func WithInstanceHeader(next gin.HandlerFunc) gin.HandlerFunc {
 		c.Header("X-Instance-Id", instanceID)
 		next(c)
 	}
+}
+
+func HeartbeatGRPCContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(ctx, 3*time.Second)
 }
 
 func newLogRequest(timestamp, username, action, status string) {
@@ -256,58 +203,108 @@ func newLogRequest(timestamp, username, action, status string) {
 }
 
 func RegisterWithConsul(consulAddr string, instanceID string) error {
-	payload := map[string]any{
+	httpPort := 8080
+	if v := os.Getenv("HTTP_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			httpPort = p
+		}
+	}
+	grpcPort := 50051
+	if v := os.Getenv("GRPC_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			grpcPort = p
+		}
+	}
+
+	httpPayload := map[string]any{
 		"ID":      instanceID,
 		"Name":    "auth-service",
 		"Address": instanceID, // resolvable via Docker's embedded DNS
-		"Port":    8080,
+		"Port":    httpPort,
 		"Check": map[string]any{
-			"HTTP":                           fmt.Sprintf("http://%s:8080/heartbeat", instanceID),
+			"HTTP":                           fmt.Sprintf("http://%s:%d/heartbeat", instanceID, httpPort),
 			"Interval":                       "5s",
 			"Timeout":                        "2s",
 			"DeregisterCriticalServiceAfter": "1m",
 		},
 	}
-	body, err := json.Marshal(payload)
+
+	grpcPayload := map[string]any{
+		"ID":      instanceID + "-grpc",
+		"Name":    "auth-grpc-service",
+		"Address": instanceID,
+		"Port":    grpcPort,
+		"Check": map[string]any{
+			"TCP":                            fmt.Sprintf("%s:%d", instanceID, grpcPort),
+			"Interval":                       "5s",
+			"Timeout":                        "2s",
+			"DeregisterCriticalServiceAfter": "1m",
+		},
+	}
+
+	httpBody, err := json.Marshal(httpPayload)
+	if err != nil {
+		return err
+	}
+	grpcBody, err := json.Marshal(grpcPayload)
 	if err != nil {
 		return err
 	}
 
 	var lastErr error
-	for attempt := 1; attempt <= 10; attempt++ {
-		req, err := http.NewRequest(http.MethodPut, consulAddr+"/v1/agent/service/register", bytes.NewReader(body))
-		if err != nil {
-			return err
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := http.DefaultClient.Do(req)
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				log.Printf("registered %s with Consul at %s", instanceID, consulAddr)
-				return nil
-			}
-			lastErr = fmt.Errorf("consul returned status %d", resp.StatusCode)
-		} else {
-			lastErr = err
-		}
-		time.Sleep(time.Duration(attempt) * time.Second)
+	bodies := []struct {
+		body []byte
+		name string
+	}{
+		{body: httpBody, name: "http"},
+		{body: grpcBody, name: "grpc"},
 	}
-	return fmt.Errorf("giving up registering with consul: %w", lastErr)
+
+	for _, entry := range bodies {
+		registered := false
+		for attempt := 1; attempt <= 10; attempt++ {
+			req, err := http.NewRequest(http.MethodPut, consulAddr+"/v1/agent/service/register", bytes.NewReader(entry.body))
+			if err != nil {
+				return err
+			}
+			req.Header.Set("Content-Type", "application/json")
+
+			resp, err := http.DefaultClient.Do(req)
+			if err == nil {
+				resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					log.Printf("registered %s %s with Consul at %s", instanceID, entry.name, consulAddr)
+					registered = true
+					break
+				}
+				lastErr = fmt.Errorf("consul returned status %d", resp.StatusCode)
+			} else {
+				lastErr = err
+			}
+			time.Sleep(time.Duration(attempt) * time.Second)
+		}
+		if !registered {
+			return fmt.Errorf("giving up registering %s endpoint with consul: %w", entry.name, lastErr)
+		}
+	}
+
+	return nil
 }
 
 func DeregisterFromConsul(consulAddr string, instanceID string) {
-	req, err := http.NewRequest(http.MethodPut, consulAddr+"/v1/agent/service/deregister/"+instanceID, nil)
-	if err != nil {
-		log.Printf("failed to build deregister request: %v", err)
-		return
+	serviceIDs := []string{instanceID, instanceID + "-grpc"}
+	for _, svcID := range serviceIDs {
+		req, err := http.NewRequest(http.MethodPut, consulAddr+"/v1/agent/service/deregister/"+svcID, nil)
+		if err != nil {
+			log.Printf("failed to build deregister request for %s: %v", svcID, err)
+			continue
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			log.Printf("failed to deregister %s from consul: %v", svcID, err)
+			continue
+		}
+		resp.Body.Close()
+		log.Printf("deregistered %s from consul", svcID)
 	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		log.Printf("failed to deregister %s from consul: %v", instanceID, err)
-		return
-	}
-	resp.Body.Close()
-	log.Printf("deregistered %s from consul", instanceID)
 }
