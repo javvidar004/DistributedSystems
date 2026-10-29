@@ -12,6 +12,11 @@ service AuthService {
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
 }
 
+service LogsService {
+  rpc NewLog(NewLogRequest) returns (LogResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
+
 message LoginRequest {
   string email = 1;
   string password = 2;
@@ -38,6 +43,22 @@ message DeleteUserRequest {
 
 message HeartbeatRequest {}
 
+message NewLogRequest {
+  string timestamp = 1;
+  string username = 2;
+  string action = 3;
+  string status = 4;
+}
+
+message Log {
+  string id = 1;
+  string timestamp = 2;
+  string username = 3;
+  string action = 4;
+  string status = 5;
+  string created_at = 6;
+}
+
 message User {
   string id = 1;
   string email = 2;
@@ -55,6 +76,11 @@ message AuthResponse {
 
 message MessageResponse {
   string message = 1;
+}
+
+message LogResponse {
+  string message = 1;
+  Log log = 2;
 }
 
 message HeartbeatResponse {

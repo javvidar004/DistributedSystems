@@ -1,22 +1,22 @@
 package service
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"gorm.io/gorm"
 
 	"proyecto.com/m/models"
+	"proyecto.com/m/pb"
 )
 
 var (
@@ -189,33 +189,37 @@ func (s *AuthService) getUserByEmail(ctx context.Context, email string) (models.
 }
 
 func newLogRequest(ctx context.Context, username, action, status string) {
-	body := map[string]string{
-		"timestamp": time.Now().Format(time.RFC3339),
-		"username":  username,
-		"action":    action,
-		"status":    status,
+	middlewareHost := os.Getenv("MIDDLEWARE_HOST")
+	if middlewareHost == "" {
+		middlewareHost = "localhost"
 	}
 
-	url := "http://" + os.Getenv("MIDDLEWARE_HOST") + ":8080/logs/log"
+	dialCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
 
-	jsonBody, err := json.Marshal(body)
+	conn, err := grpc.DialContext(
+		dialCtx,
+		middlewareHost+":50051",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
 	if err != nil {
-		log.Printf("error marshalling log request: %v", err)
+		log.Printf("error dialing logs gRPC service: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	client := pb.NewLogsServiceClient(conn)
+	_, err = client.NewLog(ctx, &pb.NewLogRequest{
+		Timestamp: time.Now().Format(time.RFC3339),
+		Username:  username,
+		Action:    action,
+		Status:    status,
+	})
+	if err != nil {
+		log.Printf("error sending log request over gRPC: %v", err)
 		return
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		log.Printf("error creating log request: %v", err)
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		log.Printf("error sending log request: %v", err)
-		return
-	}
-	defer resp.Body.Close()
-	log.Printf("log request sent: %s, response status: %s", action, resp.Status)
+	log.Printf("log request sent over gRPC: %s", action)
 }

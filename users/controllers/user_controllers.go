@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,8 +13,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"proyecto.com/m/conectors"
+	"proyecto.com/m/pb"
 	"proyecto.com/m/service"
 )
 
@@ -159,39 +163,39 @@ func HeartbeatHandler() gin.HandlerFunc {
 }
 
 func newLogRequest(timestamp, username, action, status string) {
+	middlewareHost := os.Getenv("MIDDLEWARE_HOST")
+	if middlewareHost == "" {
+		middlewareHost = "localhost"
+	}
 
-	body := conectors.NewLogRequest{
+	dialCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	conn, err := grpc.DialContext(
+		dialCtx,
+		middlewareHost+":50051",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
+	if err != nil {
+		log.Printf("error dialing logs gRPC service: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	client := pb.NewLogsServiceClient(conn)
+	_, err = client.NewLog(context.Background(), &pb.NewLogRequest{
 		Timestamp: timestamp,
 		Username:  username,
 		Action:    action,
 		Status:    status,
-	}
-
-	// Send request to LogLB service
-	url := "http://" + os.Getenv("MIDDLEWARE_HOST") + ":8080/logs/log"
-
-	jsonBody, err := json.Marshal(body)
+	})
 	if err != nil {
-		log.Printf("Error marshalling log request: %v", err)
+		log.Printf("error sending log request over gRPC: %v", err)
 		return
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		log.Printf("Error creating log request: %v", err)
-		return
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("Error sending log request: %v", err)
-		return
-	}
-	defer resp.Body.Close()
-
+	log.Printf("log request sent over gRPC: %s", action)
 }
 
 func RegisterWithConsul(consulAddr string, instanceID string) error {

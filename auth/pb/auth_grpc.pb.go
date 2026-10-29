@@ -271,3 +271,143 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "auth.proto",
 }
+
+const (
+	LogsService_NewLog_FullMethodName    = "/auth.v1.LogsService/NewLog"
+	LogsService_Heartbeat_FullMethodName = "/auth.v1.LogsService/Heartbeat"
+)
+
+// LogsServiceClient is the client API for LogsService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type LogsServiceClient interface {
+	NewLog(ctx context.Context, in *NewLogRequest, opts ...grpc.CallOption) (*LogResponse, error)
+	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
+}
+
+type logsServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewLogsServiceClient(cc grpc.ClientConnInterface) LogsServiceClient {
+	return &logsServiceClient{cc}
+}
+
+func (c *logsServiceClient) NewLog(ctx context.Context, in *NewLogRequest, opts ...grpc.CallOption) (*LogResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LogResponse)
+	err := c.cc.Invoke(ctx, LogsService_NewLog_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *logsServiceClient) Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HeartbeatResponse)
+	err := c.cc.Invoke(ctx, LogsService_Heartbeat_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// LogsServiceServer is the server API for LogsService service.
+// All implementations must embed UnimplementedLogsServiceServer
+// for forward compatibility.
+type LogsServiceServer interface {
+	NewLog(context.Context, *NewLogRequest) (*LogResponse, error)
+	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
+	mustEmbedUnimplementedLogsServiceServer()
+}
+
+// UnimplementedLogsServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedLogsServiceServer struct{}
+
+func (UnimplementedLogsServiceServer) NewLog(context.Context, *NewLogRequest) (*LogResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method NewLog not implemented")
+}
+func (UnimplementedLogsServiceServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Heartbeat not implemented")
+}
+func (UnimplementedLogsServiceServer) mustEmbedUnimplementedLogsServiceServer() {}
+func (UnimplementedLogsServiceServer) testEmbeddedByValue()                     {}
+
+// UnsafeLogsServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to LogsServiceServer will
+// result in compilation errors.
+type UnsafeLogsServiceServer interface {
+	mustEmbedUnimplementedLogsServiceServer()
+}
+
+func RegisterLogsServiceServer(s grpc.ServiceRegistrar, srv LogsServiceServer) {
+	// If the following call panics, it indicates UnimplementedLogsServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&LogsService_ServiceDesc, srv)
+}
+
+func _LogsService_NewLog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NewLogRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LogsServiceServer).NewLog(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LogsService_NewLog_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LogsServiceServer).NewLog(ctx, req.(*NewLogRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LogsService_Heartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HeartbeatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LogsServiceServer).Heartbeat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LogsService_Heartbeat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LogsServiceServer).Heartbeat(ctx, req.(*HeartbeatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// LogsService_ServiceDesc is the grpc.ServiceDesc for LogsService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var LogsService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "auth.v1.LogsService",
+	HandlerType: (*LogsServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "NewLog",
+			Handler:    _LogsService_NewLog_Handler,
+		},
+		{
+			MethodName: "Heartbeat",
+			Handler:    _LogsService_Heartbeat_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "auth.proto",
+}
