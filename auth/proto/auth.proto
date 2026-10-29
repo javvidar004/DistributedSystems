@@ -1,0 +1,89 @@
+syntax = "proto3";
+
+package auth.v1;
+
+option go_package = "proyecto.com/m/pb;pb";
+
+service AuthService {
+  rpc Login(LoginRequest) returns (AuthResponse);
+  rpc Register(RegisterRequest) returns (AuthResponse);
+  rpc UpdatePassword(UpdatePasswordRequest) returns (MessageResponse);
+  rpc DeleteUser(DeleteUserRequest) returns (MessageResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
+
+service LogsService {
+  rpc NewLog(NewLogRequest) returns (LogResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message RegisterRequest {
+  string name = 1;
+  string last_name = 2;
+  string email = 3;
+  string work_position = 4;
+  double salary = 5;
+  string password = 6;
+}
+
+message UpdatePasswordRequest {
+  string email = 1;
+  string old_password = 2;
+  string new_password = 3;
+}
+
+message DeleteUserRequest {
+  string user_id = 1;
+}
+
+message HeartbeatRequest {}
+
+message NewLogRequest {
+  string timestamp = 1;
+  string username = 2;
+  string action = 3;
+  string status = 4;
+}
+
+message Log {
+  string id = 1;
+  string timestamp = 2;
+  string username = 3;
+  string action = 4;
+  string status = 5;
+  string created_at = 6;
+}
+
+message User {
+  string id = 1;
+  string email = 2;
+  bool is_active = 3;
+  string role = 4;
+  string group = 5;
+  string created_at = 6;
+  string updated_at = 7;
+}
+
+message AuthResponse {
+  string message = 1;
+  User user = 2;
+}
+
+message MessageResponse {
+  string message = 1;
+}
+
+message LogResponse {
+  string message = 1;
+  Log log = 2;
+}
+
+message HeartbeatResponse {
+  string message = 1;
+  string instance_id = 2;
+}

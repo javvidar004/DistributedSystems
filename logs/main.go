@@ -1,23 +1,30 @@
 package main
 
 import (
-	//"bytes"
-	//"encoding/json"
 	"context"
+	"encoding/json"
+	"errors"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
+	"github.com/IBM/sarama"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"google.golang.org/grpc"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
 	"proyecto.com/m/controllers"
+	"proyecto.com/m/grpcserver"
 	"proyecto.com/m/models"
+	"proyecto.com/m/pb"
+	"proyecto.com/m/service"
 )
 
 func HeartbeatRequest(lbHost string, instanceID string) {
@@ -33,12 +40,70 @@ func HeartbeatRequest(lbHost string, instanceID string) {
 				time.Sleep(60 * time.Second)
 				continue
 			}
+			resp.Body.Close()
 			if resp.StatusCode != http.StatusOK {
 				log.Printf("Backend %s is not alive", lbHost)
 			}
 			time.Sleep(60 * time.Second)
 		}
 	}()
+}
+
+func consumeLogsFromKafka(logsSvc *service.LogsService) {
+	broker := os.Getenv("KAFKA_BROKER")
+	if broker == "" {
+		broker = "localhost:9092"
+	}
+
+	config := sarama.NewConfig()
+	config.Consumer.Return.Errors = true
+	config.Version = sarama.V2_8_0_0
+	config.Metadata.AllowAutoTopicCreation = true
+
+	consumer, err := sarama.NewConsumer([]string{broker}, config)
+	if err != nil {
+		log.Printf("error connecting kafka consumer: %v", err)
+		return
+	}
+	defer consumer.Close()
+
+	partitionConsumer, err := consumer.ConsumePartition("logs_topic", 0, sarama.OffsetNewest)
+	if err != nil {
+		log.Printf("error consuming logs_topic: %v", err)
+		return
+	}
+	defer partitionConsumer.Close()
+
+	for {
+		select {
+		case msg := <-partitionConsumer.Messages():
+			if msg == nil {
+				continue
+			}
+			var payload struct {
+				Timestamp string `json:"timestamp"`
+				Username  string `json:"username"`
+				Action    string `json:"action"`
+				Status    string `json:"status"`
+			}
+			if err := json.Unmarshal(msg.Value, &payload); err != nil {
+				log.Printf("error unmarshalling kafka log payload: %v", err)
+				continue
+			}
+			if _, err := logsSvc.NewLog(context.Background(), service.NewLogInput{
+				Timestamp: payload.Timestamp,
+				Username:  payload.Username,
+				Action:    payload.Action,
+				Status:    payload.Status,
+			}); err != nil {
+				log.Printf("error persisting log from kafka: %v", err)
+			}
+		case err := <-partitionConsumer.Errors():
+			if err != nil {
+				log.Printf("kafka consumer error: %v", err)
+			}
+		}
+	}
 }
 
 func main() {
@@ -50,6 +115,14 @@ func main() {
 	name := os.Getenv("DB_NAME")
 	middlewareHost := os.Getenv("MIDDLEWARE_HOST")
 	instanceID := os.Getenv("INSTANCE_ID")
+	httpPort := os.Getenv("HTTP_PORT")
+	if httpPort == "" {
+		httpPort = "8080"
+	}
+	grpcPort := os.Getenv("GRPC_PORT")
+	if grpcPort == "" {
+		grpcPort = "50051"
+	}
 
 	consulAddr := os.Getenv("CONSUL_HTTP_ADDR")
 
@@ -71,6 +144,9 @@ func main() {
 		log.Fatal("Failed to migrate database:", err)
 	}
 
+	logsSvc := service.NewLogsService(db)
+	go consumeLogsFromKafka(logsSvc)
+
 	router := gin.Default()
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"*"},
@@ -83,14 +159,46 @@ func main() {
 
 	HeartbeatRequest(middlewareHost, instanceID)
 
-	router.GET("/log", controllers.WithInstanceHeader(controllers.GetLogHandler(db)))
-	router.POST("/log", controllers.WithInstanceHeader(controllers.NewLogHandler(db)))
+	router.GET("/log", controllers.WithInstanceHeader(controllers.GetLogHandler(logsSvc)))
+	router.POST("/log", controllers.WithInstanceHeader(controllers.NewLogHandler(logsSvc)))
 	router.GET("/heartbeat", controllers.WithInstanceHeader(controllers.HeartbeatHandler()))
 
 	srv := &http.Server{
-		Addr:    ":8080",
+		Addr:    ":" + httpPort,
 		Handler: router,
 	}
+
+	grpcLis, err := net.Listen("tcp", ":"+grpcPort)
+	if err != nil {
+		log.Fatal("failed to listen for gRPC:", err)
+	}
+	grpcSrv := grpc.NewServer()
+	pb.RegisterLogsServiceServer(grpcSrv, grpcserver.NewLogsServer(logsSvc))
+
+	errCh := make(chan error, 2)
+	var once sync.Once
+	reportErr := func(err error) {
+		if err == nil {
+			return
+		}
+		once.Do(func() {
+			errCh <- err
+		})
+	}
+
+	go func() {
+		log.Printf("HTTP server listening on :%s", httpPort)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			reportErr(err)
+		}
+	}()
+
+	go func() {
+		log.Printf("gRPC server listening on :%s", grpcPort)
+		if err := grpcSrv.Serve(grpcLis); err != nil {
+			reportErr(err)
+		}
+	}()
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
@@ -100,10 +208,14 @@ func main() {
 		controllers.DeregisterFromConsul(consulAddr, instanceID)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		srv.Shutdown(ctx)
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Printf("error shutting down HTTP server: %v", err)
+		}
+		grpcSrv.GracefulStop()
+		reportErr(http.ErrServerClosed)
 	}()
 
-	if err := router.Run(":8080"); err != nil {
-		log.Fatal("Failed to start server:", err)
+	if err := <-errCh; err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatal("server stopped with error:", err)
 	}
 }
