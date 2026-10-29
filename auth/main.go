@@ -100,6 +100,7 @@ func main() {
 	HeartbeatRequest(middlewareHost, instanceID)
 
 	router.POST("/login", controllers.WithInstanceHeader(controllers.LoginHandler(authSvc)))
+	router.POST("/validate", controllers.WithInstanceHeader(controllers.ValidateJWTHandler(authSvc)))
 	router.POST("/register", controllers.WithInstanceHeader(controllers.RegisterHandler(authSvc)))
 	router.PUT("/update", controllers.WithInstanceHeader(controllers.UpdatePasswordHandler(authSvc)))
 	router.DELETE("/delete/:userID", controllers.WithInstanceHeader(controllers.DeleteUserHandler(authSvc)))

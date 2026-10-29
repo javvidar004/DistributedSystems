@@ -35,7 +35,52 @@ func LoginHandler(authSvc *service.AuthService) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"message": res.Message, "user": res.User})
+		tokens, err := authSvc.CreateJWT(res.User)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to create auth token"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":       res.Message,
+			"user":          res.User,
+			"access_token":  tokens.AccessToken,
+			"refresh_token": tokens.RefreshToken,
+		})
+	}
+}
+
+func ValidateJWTHandler(authSvc *service.AuthService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		token := c.GetHeader("Authorization")
+		if len(token) > 7 && token[:7] == "Bearer " {
+			token = token[7:]
+		}
+
+		if token == "" {
+			var payload conectors.ValidateJWTRequest
+			if err := c.ShouldBindJSON(&payload); err == nil {
+				token = payload.Token
+			}
+		}
+
+		if token == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "token is required"})
+			return
+		}
+
+		claims, err := authSvc.ValidateJWT(token)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "invalid token"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "token is valid",
+			"user_id": claims.UserID,
+			"role":    claims.Role,
+			"group":   claims.Group,
+		})
 	}
 }
 
@@ -145,6 +190,8 @@ func mapHTTPError(err error) (int, string) {
 		return http.StatusNotFound, "user not found"
 	case errors.Is(err, service.ErrOldPasswordMismatch):
 		return http.StatusUnauthorized, "old password is incorrect"
+	case errors.Is(err, service.ErrInvalidToken):
+		return http.StatusUnauthorized, "invalid token"
 	default:
 		return http.StatusInternalServerError, "internal server error"
 	}

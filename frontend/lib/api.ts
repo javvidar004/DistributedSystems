@@ -26,13 +26,31 @@ type BackendUserResponse = AuthResponse | { user: User };
 type BackendUsersResponse = {users: User[]} | UserResponse;
 type BackendLogsResponse = { logs: LogEntry[] };
 
-const getStoredUserId = () => {
+const getStoredAccessToken = () => {
     if (typeof document === 'undefined') {
         return null;
     }
 
-    const match = document.cookie.match('(?:^|; )userId=([^;]+)');
+    const match = document.cookie.match('(?:^|; )accessToken=([^;]+)');
     return match && match[1] ? decodeURIComponent(match[1]) : null;
+};
+
+const extractUserIdFromToken = (token: string): string | null => {
+    try {
+        const payloadPart = token.split('.')[1];
+        if (!payloadPart) {
+            return null;
+        }
+
+        const normalized = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
+        const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+        const decoded = atob(padded);
+        const payload = JSON.parse(decoded) as { user_id?: string; sub?: string };
+
+        return payload.user_id ?? payload.sub ?? null;
+    } catch {
+        return null;
+    }
 };
 
 // Helper to clear client-side auth state
@@ -42,10 +60,12 @@ export const clearAuth = () => {
             delete apiClient.defaults.headers.common['Authorization'];
         }
         if (typeof document !== 'undefined') {
-            document.cookie = 'userId=; Path=/; Max-Age=0; SameSite=Lax';
+            document.cookie = 'accessToken=; Path=/; Max-Age=0; SameSite=Lax';
+            document.cookie = 'refreshToken=; Path=/; Max-Age=0; SameSite=Lax';
         }
         if (typeof localStorage !== 'undefined') {
-            localStorage.removeItem('userId');
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
         }
     } catch (e) {
         console.warn('clearAuth failed', e);
@@ -57,28 +77,63 @@ export const userSignIn = async (
     credentials: LoginRequest
 ): Promise<AuthResponse> => {
     try {
-        const response = await apiClient.post<BackendUserResponse>('/auth/login', credentials);
+        const response = await apiClient.post<AuthResponse>('/auth/login', credentials);
         const user = response.data.user;
+        const accessToken = response.data.access_token;
+        const refreshToken = response.data.refresh_token;
 
-        if (user?.id) {
+        if (accessToken) {
             try {
                 const maxAge = 60 * 60 * 24 * 7;
                 const secure = window.location.protocol === 'https:' ? '; Secure' : '';
-                document.cookie = `userId=${encodeURIComponent(String(user.id))}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secure}`;
-                localStorage.setItem('userId', String(user.id));
+                document.cookie = `accessToken=${encodeURIComponent(accessToken)}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secure}`;
+                localStorage.setItem('accessToken', accessToken);
+                apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
             } catch (e) {
-                console.warn('Failed to set userId cookie', e);
+                console.warn('Failed to store access token', e);
+            }
+        }
+
+        if (refreshToken) {
+            try {
+                const maxAge = 60 * 60 * 24 * 30;
+                const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+                document.cookie = `refreshToken=${encodeURIComponent(refreshToken)}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secure}`;
+                localStorage.setItem('refreshToken', refreshToken);
+            } catch (e) {
+                console.warn('Failed to store refresh token', e);
             }
         }
 
         return {
             message: response.data.message ?? 'login successful',
             user,
+            access_token: accessToken,
+            refresh_token: refreshToken,
         };
     } catch (error) {
         console.error('Error signing in:', error);
         throw error;
     }
+};
+
+export const validateJWT = async (token?: string): Promise<{ user_id: string; role: string; group: string }> => {
+    const bearerToken = token ?? getStoredAccessToken();
+    if (!bearerToken) {
+        throw new Error('access token not found');
+    }
+
+    const response = await apiClient.post<{ user_id: string; role: string; group: string }>(
+        '/auth/validate',
+        { token: bearerToken },
+        {
+            headers: {
+                Authorization: `Bearer ${bearerToken}`,
+            },
+        }
+    );
+
+    return response.data;
 };
 export const registerUser = async (payload: RegisterRequest): Promise<AuthResponse> => {
     const response = await apiClient.post<AuthResponse>('/auth/register', {
@@ -93,13 +148,22 @@ export const registerUser = async (payload: RegisterRequest): Promise<AuthRespon
 };
 
 export const getUserData = async (): Promise<User> => {
-    const userId = getStoredUserId();
-
-    if (!userId) {
-        throw new Error('userId cookie not found');
+    const token = getStoredAccessToken();
+    if (!token) {
+        throw new Error('access token not found');
     }
 
-    const response = await apiClient.get<UserResponse>(`/users/user/${userId}`);
+    const userId = extractUserIdFromToken(token);
+
+    if (!userId) {
+        throw new Error('invalid access token payload');
+    }
+
+    const response = await apiClient.get<UserResponse>(`/users/user/${userId}`, {
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    });
     const user = response.data.user;
 
     if (Array.isArray(user)) {
@@ -142,10 +206,15 @@ export const createUser = async (payload: CreateUserRequest): Promise<User> => {
 };
 
 export const updateUserProfile = async (payload: UpdateUserRequest): Promise<User> => {
-    const userId = getStoredUserId();
+    const token = getStoredAccessToken();
+    if (!token) {
+        throw new Error('access token not found');
+    }
+
+    const userId = extractUserIdFromToken(token);
 
     if (!userId) {
-        throw new Error('userId cookie not found');
+        throw new Error('invalid access token payload');
     }
 
     const response = await apiClient.put<UserResponse>(`/users/user/${userId}`, {
@@ -154,6 +223,10 @@ export const updateUserProfile = async (payload: UpdateUserRequest): Promise<Use
         last_name: payload.lastName,
         work_position: payload.workPosition,
         salary: payload.salary,
+    }, {
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
     });
     const user = response.data.user;
 
