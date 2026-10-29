@@ -20,6 +20,10 @@ type UpdatePasswordRequest struct {
 	OldPassword string `json:"old_password"`
 }
 
+type ValidateJWTRequest struct {
+	Token string `json:"token"`
+}
+
 type NewLogRequest struct {
 	Timestamp string `json:"timestamp"`
 	Username  string `json:"username"`

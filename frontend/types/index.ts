@@ -14,6 +14,8 @@ export interface User {
 export interface AuthResponse {
   message: string;
   user: User;
+  access_token?: string;
+  refresh_token?: string;
 }
 
 export interface LoginRequest {
