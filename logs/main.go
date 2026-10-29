@@ -1,9 +1,8 @@
 package main
 
 import (
-	//"bytes"
-	//"encoding/json"
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"net"
@@ -14,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/IBM/sarama"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc"
@@ -47,6 +47,63 @@ func HeartbeatRequest(lbHost string, instanceID string) {
 			time.Sleep(60 * time.Second)
 		}
 	}()
+}
+
+func consumeLogsFromKafka(logsSvc *service.LogsService) {
+	broker := os.Getenv("KAFKA_BROKER")
+	if broker == "" {
+		broker = "localhost:9092"
+	}
+
+	config := sarama.NewConfig()
+	config.Consumer.Return.Errors = true
+	config.Version = sarama.V2_8_0_0
+	config.Metadata.AllowAutoTopicCreation = true
+
+	consumer, err := sarama.NewConsumer([]string{broker}, config)
+	if err != nil {
+		log.Printf("error connecting kafka consumer: %v", err)
+		return
+	}
+	defer consumer.Close()
+
+	partitionConsumer, err := consumer.ConsumePartition("logs_topic", 0, sarama.OffsetNewest)
+	if err != nil {
+		log.Printf("error consuming logs_topic: %v", err)
+		return
+	}
+	defer partitionConsumer.Close()
+
+	for {
+		select {
+		case msg := <-partitionConsumer.Messages():
+			if msg == nil {
+				continue
+			}
+			var payload struct {
+				Timestamp string `json:"timestamp"`
+				Username  string `json:"username"`
+				Action    string `json:"action"`
+				Status    string `json:"status"`
+			}
+			if err := json.Unmarshal(msg.Value, &payload); err != nil {
+				log.Printf("error unmarshalling kafka log payload: %v", err)
+				continue
+			}
+			if _, err := logsSvc.NewLog(context.Background(), service.NewLogInput{
+				Timestamp: payload.Timestamp,
+				Username:  payload.Username,
+				Action:    payload.Action,
+				Status:    payload.Status,
+			}); err != nil {
+				log.Printf("error persisting log from kafka: %v", err)
+			}
+		case err := <-partitionConsumer.Errors():
+			if err != nil {
+				log.Printf("kafka consumer error: %v", err)
+			}
+		}
+	}
 }
 
 func main() {
@@ -88,6 +145,7 @@ func main() {
 	}
 
 	logsSvc := service.NewLogsService(db)
+	go consumeLogsFromKafka(logsSvc)
 
 	router := gin.Default()
 	router.Use(cors.New(cors.Config{

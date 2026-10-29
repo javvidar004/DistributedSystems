@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -9,14 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/IBM/sarama"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"gorm.io/gorm"
 
 	"proyecto.com/m/models"
-	"proyecto.com/m/pb"
 )
 
 var (
@@ -189,37 +188,45 @@ func (s *AuthService) getUserByEmail(ctx context.Context, email string) (models.
 }
 
 func newLogRequest(ctx context.Context, username, action, status string) {
-	middlewareHost := os.Getenv("MIDDLEWARE_HOST")
-	if middlewareHost == "" {
-		middlewareHost = "localhost"
+	payload := map[string]string{
+		"timestamp": time.Now().Format(time.RFC3339),
+		"username":  username,
+		"action":    action,
+		"status":    status,
 	}
 
-	dialCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-
-	conn, err := grpc.DialContext(
-		dialCtx,
-		middlewareHost+":50051",
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
-	)
+	message, err := json.Marshal(payload)
 	if err != nil {
-		log.Printf("error dialing logs gRPC service: %v", err)
+		log.Printf("error marshalling kafka log payload: %v", err)
 		return
 	}
-	defer conn.Close()
 
-	client := pb.NewLogsServiceClient(conn)
-	_, err = client.NewLog(ctx, &pb.NewLogRequest{
-		Timestamp: time.Now().Format(time.RFC3339),
-		Username:  username,
-		Action:    action,
-		Status:    status,
+	broker := os.Getenv("KAFKA_BROKER")
+	if broker == "" {
+		broker = "localhost:9092"
+	}
+
+	config := sarama.NewConfig()
+	config.Producer.Return.Successes = true
+	config.Producer.Return.Errors = true
+	config.Version = sarama.V2_8_0_0
+	config.Metadata.AllowAutoTopicCreation = true
+
+	producer, err := sarama.NewSyncProducer([]string{broker}, config)
+	if err != nil {
+		log.Printf("error connecting to kafka: %v", err)
+		return
+	}
+	defer producer.Close()
+
+	_, _, err = producer.SendMessage(&sarama.ProducerMessage{
+		Topic: "logs_topic",
+		Value: sarama.ByteEncoder(message),
 	})
 	if err != nil {
-		log.Printf("error sending log request over gRPC: %v", err)
+		log.Printf("error sending log to kafka: %v", err)
 		return
 	}
 
-	log.Printf("log request sent over gRPC: %s", action)
+	log.Printf("log request sent to kafka topic logs_topic: %s", action)
 }
