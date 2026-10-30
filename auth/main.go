@@ -15,6 +15,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
@@ -85,7 +86,19 @@ func main() {
 		log.Fatal("Failed to migrate database:", err)
 	}
 
-	authSvc := service.NewAuthService(db)
+	usersGRPCAddr := os.Getenv("USERS_GRPC_ADDR")
+	if usersGRPCAddr == "" {
+		usersGRPCAddr = "usersbe1:50051"
+	}
+
+	usersConn, err := grpc.NewClient(usersGRPCAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("failed to connect to users gRPC service at %s: %v", usersGRPCAddr, err)
+	}
+	defer usersConn.Close()
+
+	usersClient := pb.NewUsersServiceClient(usersConn)
+	authSvc := service.NewAuthService(db, usersClient)
 
 	router := gin.Default()
 	router.Use(cors.New(cors.Config{

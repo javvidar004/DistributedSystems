@@ -23,11 +23,12 @@ const (
 
 type CreateUserRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Email         string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	LastName      string                 `protobuf:"bytes,3,opt,name=last_name,json=lastName,proto3" json:"last_name,omitempty"`
-	WorkPosition  string                 `protobuf:"bytes,4,opt,name=work_position,json=workPosition,proto3" json:"work_position,omitempty"`
-	Salary        float64                `protobuf:"fixed64,5,opt,name=salary,proto3" json:"salary,omitempty"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Email         string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	LastName      string                 `protobuf:"bytes,4,opt,name=last_name,json=lastName,proto3" json:"last_name,omitempty"`
+	WorkPosition  string                 `protobuf:"bytes,5,opt,name=work_position,json=workPosition,proto3" json:"work_position,omitempty"`
+	Salary        float64                `protobuf:"fixed64,6,opt,name=salary,proto3" json:"salary,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -60,6 +61,13 @@ func (x *CreateUserRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use CreateUserRequest.ProtoReflect.Descriptor instead.
 func (*CreateUserRequest) Descriptor() ([]byte, []int) {
 	return file_users_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *CreateUserRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
 }
 
 func (x *CreateUserRequest) GetEmail() string {
@@ -833,13 +841,14 @@ var File_users_proto protoreflect.FileDescriptor
 
 const file_users_proto_rawDesc = "" +
 	"\n" +
-	"\vusers.proto\x12\busers.v1\"\x97\x01\n" +
-	"\x11CreateUserRequest\x12\x14\n" +
-	"\x05email\x18\x01 \x01(\tR\x05email\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
-	"\tlast_name\x18\x03 \x01(\tR\blastName\x12#\n" +
-	"\rwork_position\x18\x04 \x01(\tR\fworkPosition\x12\x16\n" +
-	"\x06salary\x18\x05 \x01(\x01R\x06salary\"\x97\x01\n" +
+	"\vusers.proto\x12\busers.v1\"\xa7\x01\n" +
+	"\x11CreateUserRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x1b\n" +
+	"\tlast_name\x18\x04 \x01(\tR\blastName\x12#\n" +
+	"\rwork_position\x18\x05 \x01(\tR\fworkPosition\x12\x16\n" +
+	"\x06salary\x18\x06 \x01(\x01R\x06salary\"\x97\x01\n" +
 	"\x11UpdateUserRequest\x12\x14\n" +
 	"\x05email\x18\x01 \x01(\tR\x05email\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +

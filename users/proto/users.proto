@@ -19,11 +19,12 @@ service LogsService {
 }
 
 message CreateUserRequest {
-  string email = 1;
-  string name = 2;
-  string last_name = 3;
-  string work_position = 4;
-  double salary = 5;
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  string last_name = 4;
+  string work_position = 5;
+  double salary = 6;
 }
 
 message UpdateUserRequest {

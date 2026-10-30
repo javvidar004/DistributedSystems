@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"proyecto.com/m/models"
@@ -26,6 +27,7 @@ type UsersService struct {
 }
 
 type CreateUserInput struct {
+	ID           string
 	Email        string
 	Name         string
 	LastName     string
@@ -69,7 +71,17 @@ func (s *UsersService) CreateUser(ctx context.Context, input CreateUserInput) (U
 		return UserResult{}, err
 	}
 
+	userID := input.ID
+	if userID == "" {
+		uid, err := uuid.NewRandom()
+		if err != nil {
+			return UserResult{}, fmt.Errorf("could not generate UUID: %w", err)
+		}
+		userID = uid.String()
+	}
+
 	user := models.User{
+		ID:           userID,
 		Email:        input.Email,
 		Name:         input.Name,
 		LastName:     input.LastName,

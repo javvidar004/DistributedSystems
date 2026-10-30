@@ -23,6 +23,7 @@ func NewUsersServer(usersSvc *service.UsersService) *UsersServer {
 
 func (s *UsersServer) CreateUser(ctx context.Context, req *pb.CreateUserRequest) (*pb.UserResponse, error) {
 	res, err := s.usersSvc.CreateUser(ctx, service.CreateUserInput{
+		ID:           req.GetId(),
 		Email:        req.GetEmail(),
 		Name:         req.GetName(),
 		LastName:     req.GetLastName(),

@@ -16,6 +16,7 @@ import (
 	"gorm.io/gorm"
 
 	"proyecto.com/m/models"
+	"proyecto.com/m/pb"
 )
 
 var (
@@ -25,10 +26,12 @@ var (
 	ErrUserNotFound        = errors.New("user not found")
 	ErrUserAlreadyExists   = errors.New("username already exists")
 	ErrOldPasswordMismatch = errors.New("old password is incorrect")
+	ErrReplicationFailed   = errors.New("failed to replicate user in users service")
 )
 
 type AuthService struct {
-	db *gorm.DB
+	db          *gorm.DB
+	usersClient pb.UsersServiceClient
 }
 
 type RegisterInput struct {
@@ -54,8 +57,8 @@ type MessageResult struct {
 	Message string
 }
 
-func NewAuthService(db *gorm.DB) *AuthService {
-	return &AuthService{db: db}
+func NewAuthService(db *gorm.DB, usersClient pb.UsersServiceClient) *AuthService {
+	return &AuthService{db: db, usersClient: usersClient}
 }
 
 func (s *AuthService) Login(ctx context.Context, email, password string) (LoginResult, error) {
@@ -81,7 +84,7 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (LoginR
 	return LoginResult{Message: "login successful", User: user}, nil
 }
 
-func (s *AuthService) Register(ctx context.Context, input RegisterInput) (RegisterResult, error) {
+func (s *AuthService) RegisterAndReplicate(ctx context.Context, input RegisterInput) (RegisterResult, error) {
 	if input.Email == "" || input.Password == "" {
 		newLogRequest(ctx, input.Email, "register", "failed")
 		return RegisterResult{}, ErrRequiredFields
@@ -121,8 +124,44 @@ func (s *AuthService) Register(ctx context.Context, input RegisterInput) (Regist
 		return RegisterResult{}, fmt.Errorf("could not create user: %w", err)
 	}
 
+	if err := s.replicateUserToUsersService(ctx, user.ID, input); err != nil {
+		// Best-effort compensation to avoid inconsistent state between auth and users DBs.
+		if delErr := s.db.WithContext(ctx).Delete(&models.User{}, "id = ?", user.ID).Error; delErr != nil {
+			log.Printf("failed to rollback auth user %s after users replication error: %v", user.ID, delErr)
+		}
+		newLogRequest(ctx, input.Email, "register", "failed")
+		return RegisterResult{}, err
+	}
+
 	newLogRequest(ctx, input.Email, "register", "success")
 	return RegisterResult{Message: "user created successfully", User: user}, nil
+}
+
+func (s *AuthService) Register(ctx context.Context, input RegisterInput) (RegisterResult, error) {
+	return s.RegisterAndReplicate(ctx, input)
+}
+
+func (s *AuthService) replicateUserToUsersService(ctx context.Context, userID string, input RegisterInput) error {
+	if s.usersClient == nil {
+		return ErrReplicationFailed
+	}
+
+	grpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	_, err := s.usersClient.CreateUser(grpcCtx, &pb.CreateUserRequest{
+		Id:           userID,
+		Email:        input.Email,
+		Name:         input.Name,
+		LastName:     input.LastName,
+		WorkPosition: input.WorkPosition,
+		Salary:       input.Salary,
+	})
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrReplicationFailed, err)
+	}
+
+	return nil
 }
 
 func (s *AuthService) UpdatePassword(ctx context.Context, email, oldPassword, newPassword string) (MessageResult, error) {

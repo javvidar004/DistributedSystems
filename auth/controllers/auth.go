@@ -93,7 +93,7 @@ func RegisterHandler(authSvc *service.AuthService) gin.HandlerFunc {
 			return
 		}
 
-		res, err := authSvc.Register(c.Request.Context(), service.RegisterInput{
+		res, err := authSvc.RegisterAndReplicate(c.Request.Context(), service.RegisterInput{
 			Name:         payload.Name,
 			LastName:     payload.LastName,
 			Email:        payload.Email,
@@ -192,6 +192,8 @@ func mapHTTPError(err error) (int, string) {
 		return http.StatusUnauthorized, "old password is incorrect"
 	case errors.Is(err, service.ErrInvalidToken):
 		return http.StatusUnauthorized, "invalid token"
+	case errors.Is(err, service.ErrReplicationFailed):
+		return http.StatusServiceUnavailable, "could not replicate user in users service"
 	default:
 		return http.StatusInternalServerError, "internal server error"
 	}
