@@ -75,9 +75,25 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (LoginR
 		return LoginResult{}, err
 	}
 
-	if user.PasswordHash != password {
+	matched, needsMigration := verifyPassword(user.PasswordHash, password)
+	if !matched {
 		newLogRequest(ctx, email, "login", "failed")
 		return LoginResult{}, ErrInvalidCredentials
+	}
+
+	if needsMigration {
+		hashedPassword, err := hashPassword(password)
+		if err != nil {
+			newLogRequest(ctx, email, "login", "failed")
+			return LoginResult{}, fmt.Errorf("could not migrate legacy password hash: %w", err)
+		}
+
+		if err := s.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", user.ID).Update("password_hash", hashedPassword).Error; err != nil {
+			newLogRequest(ctx, email, "login", "failed")
+			return LoginResult{}, fmt.Errorf("could not persist migrated password hash: %w", err)
+		}
+
+		user.PasswordHash = hashedPassword
 	}
 
 	newLogRequest(ctx, email, "login", "success")
@@ -98,7 +114,7 @@ func (s *AuthService) RegisterAndReplicate(ctx context.Context, input RegisterIn
 		return RegisterResult{}, err
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	hash, err := hashPassword(input.Password)
 	if err != nil {
 		newLogRequest(ctx, input.Email, "register", "failed")
 		return RegisterResult{}, fmt.Errorf("could not hash password: %w", err)
@@ -113,7 +129,7 @@ func (s *AuthService) RegisterAndReplicate(ctx context.Context, input RegisterIn
 	user := models.User{
 		ID:           uid.String(),
 		Email:        input.Email,
-		PasswordHash: strings.TrimSpace(string(hash)),
+		PasswordHash: hash,
 		IsActive:     true,
 		Role:         "user",
 		Group:        "default",
@@ -179,12 +195,19 @@ func (s *AuthService) UpdatePassword(ctx context.Context, email, oldPassword, ne
 		return MessageResult{}, err
 	}
 
-	if user.PasswordHash != oldPassword {
+	matched, _ := verifyPassword(user.PasswordHash, oldPassword)
+	if !matched {
 		newLogRequest(ctx, email, "update_password", "failed")
 		return MessageResult{}, ErrOldPasswordMismatch
 	}
 
-	user.PasswordHash = newPassword
+	hashedPassword, err := hashPassword(newPassword)
+	if err != nil {
+		newLogRequest(ctx, email, "update_password", "failed")
+		return MessageResult{}, fmt.Errorf("could not hash new password: %w", err)
+	}
+
+	user.PasswordHash = hashedPassword
 	if err := s.db.WithContext(ctx).Save(&user).Error; err != nil {
 		newLogRequest(ctx, email, "update_password", "failed")
 		return MessageResult{}, fmt.Errorf("could not update password: %w", err)
@@ -268,4 +291,26 @@ func newLogRequest(ctx context.Context, username, action, status string) {
 	}
 
 	log.Printf("log request sent to kafka topic logs_topic: %s", action)
+}
+
+func hashPassword(plainPassword string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(plainPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(string(hash)), nil
+}
+
+func verifyPassword(storedPasswordHash, plainPassword string) (bool, bool) {
+	if isBcryptHash(storedPasswordHash) {
+		err := bcrypt.CompareHashAndPassword([]byte(storedPasswordHash), []byte(plainPassword))
+		return err == nil, false
+	}
+
+	return storedPasswordHash == plainPassword, true
+}
+
+func isBcryptHash(value string) bool {
+	return strings.HasPrefix(value, "$2a$") || strings.HasPrefix(value, "$2b$") || strings.HasPrefix(value, "$2y$")
 }
