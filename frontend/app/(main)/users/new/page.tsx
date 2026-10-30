@@ -143,7 +143,7 @@ export default function CreateUserPage() {
           disabled={loading}
           className="w-full py-3 px-4 bg-secondary text-white font-semibold rounded-md hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-secondary transition-transform transform hover:scale-105 disabled:opacity-60"
         >
-          {loading ? 'Creating account...' : 'Sign Up'}
+          {loading ? 'Creating account...' : 'Create User'}
         </button>
 
         {error && (
