@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package users.v1;
+
+option go_package = "proyecto.com/m/pb;pb";
+
+service UsersService {
+  rpc CreateUser(CreateUserRequest) returns (UserResponse);
+}
+
+message CreateUserRequest {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  string last_name = 4;
+  string work_position = 5;
+  double salary = 6;
+}
+
+message UserResponse {
+  string message = 1;
+}

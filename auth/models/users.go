@@ -4,7 +4,7 @@ import "time"
 
 type User struct {
 	ID           string    `gorm:"primaryKey" json:"id"`
-	PasswordHash string    `gorm:"not null" json:"password"`
+	PasswordHash string    `gorm:"not null" json:"-"`
 	Email        string    `gorm:"not null;unique" json:"email"`
 	IsActive     bool      `gorm:"default:true" json:"is_active"`
 	Role         string    `gorm:"not null" json:"role"`

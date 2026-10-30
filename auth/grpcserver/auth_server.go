@@ -34,7 +34,7 @@ func (s *AuthServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb.AuthR
 }
 
 func (s *AuthServer) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.AuthResponse, error) {
-	res, err := s.authSvc.Register(ctx, service.RegisterInput{
+	res, err := s.authSvc.RegisterAndReplicate(ctx, service.RegisterInput{
 		Name:         req.GetName(),
 		LastName:     req.GetLastName(),
 		Email:        req.GetEmail(),
@@ -88,6 +88,8 @@ func mapGRPCError(err error) error {
 		return status.Error(codes.AlreadyExists, err.Error())
 	case errors.Is(err, service.ErrUserNotFound):
 		return status.Error(codes.NotFound, err.Error())
+	case errors.Is(err, service.ErrReplicationFailed):
+		return status.Error(codes.Unavailable, err.Error())
 	default:
 		return status.Error(codes.Internal, "internal server error")
 	}

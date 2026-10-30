@@ -16,6 +16,7 @@ import (
 	"gorm.io/gorm"
 
 	"proyecto.com/m/models"
+	"proyecto.com/m/pb"
 )
 
 var (
@@ -25,10 +26,12 @@ var (
 	ErrUserNotFound        = errors.New("user not found")
 	ErrUserAlreadyExists   = errors.New("username already exists")
 	ErrOldPasswordMismatch = errors.New("old password is incorrect")
+	ErrReplicationFailed   = errors.New("failed to replicate user in users service")
 )
 
 type AuthService struct {
-	db *gorm.DB
+	db          *gorm.DB
+	usersClient pb.UsersServiceClient
 }
 
 type RegisterInput struct {
@@ -54,8 +57,8 @@ type MessageResult struct {
 	Message string
 }
 
-func NewAuthService(db *gorm.DB) *AuthService {
-	return &AuthService{db: db}
+func NewAuthService(db *gorm.DB, usersClient pb.UsersServiceClient) *AuthService {
+	return &AuthService{db: db, usersClient: usersClient}
 }
 
 func (s *AuthService) Login(ctx context.Context, email, password string) (LoginResult, error) {
@@ -72,16 +75,32 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (LoginR
 		return LoginResult{}, err
 	}
 
-	if user.PasswordHash != password {
+	matched, needsMigration := verifyPassword(user.PasswordHash, password)
+	if !matched {
 		newLogRequest(ctx, email, "login", "failed")
 		return LoginResult{}, ErrInvalidCredentials
+	}
+
+	if needsMigration {
+		hashedPassword, err := hashPassword(password)
+		if err != nil {
+			newLogRequest(ctx, email, "login", "failed")
+			return LoginResult{}, fmt.Errorf("could not migrate legacy password hash: %w", err)
+		}
+
+		if err := s.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", user.ID).Update("password_hash", hashedPassword).Error; err != nil {
+			newLogRequest(ctx, email, "login", "failed")
+			return LoginResult{}, fmt.Errorf("could not persist migrated password hash: %w", err)
+		}
+
+		user.PasswordHash = hashedPassword
 	}
 
 	newLogRequest(ctx, email, "login", "success")
 	return LoginResult{Message: "login successful", User: user}, nil
 }
 
-func (s *AuthService) Register(ctx context.Context, input RegisterInput) (RegisterResult, error) {
+func (s *AuthService) RegisterAndReplicate(ctx context.Context, input RegisterInput) (RegisterResult, error) {
 	if input.Email == "" || input.Password == "" {
 		newLogRequest(ctx, input.Email, "register", "failed")
 		return RegisterResult{}, ErrRequiredFields
@@ -95,7 +114,7 @@ func (s *AuthService) Register(ctx context.Context, input RegisterInput) (Regist
 		return RegisterResult{}, err
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	hash, err := hashPassword(input.Password)
 	if err != nil {
 		newLogRequest(ctx, input.Email, "register", "failed")
 		return RegisterResult{}, fmt.Errorf("could not hash password: %w", err)
@@ -110,7 +129,7 @@ func (s *AuthService) Register(ctx context.Context, input RegisterInput) (Regist
 	user := models.User{
 		ID:           uid.String(),
 		Email:        input.Email,
-		PasswordHash: strings.TrimSpace(string(hash)),
+		PasswordHash: hash,
 		IsActive:     true,
 		Role:         "user",
 		Group:        "default",
@@ -121,8 +140,44 @@ func (s *AuthService) Register(ctx context.Context, input RegisterInput) (Regist
 		return RegisterResult{}, fmt.Errorf("could not create user: %w", err)
 	}
 
+	if err := s.replicateUserToUsersService(ctx, user.ID, input); err != nil {
+		// Best-effort compensation to avoid inconsistent state between auth and users DBs.
+		if delErr := s.db.WithContext(ctx).Delete(&models.User{}, "id = ?", user.ID).Error; delErr != nil {
+			log.Printf("failed to rollback auth user %s after users replication error: %v", user.ID, delErr)
+		}
+		newLogRequest(ctx, input.Email, "register", "failed")
+		return RegisterResult{}, err
+	}
+
 	newLogRequest(ctx, input.Email, "register", "success")
 	return RegisterResult{Message: "user created successfully", User: user}, nil
+}
+
+func (s *AuthService) Register(ctx context.Context, input RegisterInput) (RegisterResult, error) {
+	return s.RegisterAndReplicate(ctx, input)
+}
+
+func (s *AuthService) replicateUserToUsersService(ctx context.Context, userID string, input RegisterInput) error {
+	if s.usersClient == nil {
+		return ErrReplicationFailed
+	}
+
+	grpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	_, err := s.usersClient.CreateUser(grpcCtx, &pb.CreateUserRequest{
+		Id:           userID,
+		Email:        input.Email,
+		Name:         input.Name,
+		LastName:     input.LastName,
+		WorkPosition: input.WorkPosition,
+		Salary:       input.Salary,
+	})
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrReplicationFailed, err)
+	}
+
+	return nil
 }
 
 func (s *AuthService) UpdatePassword(ctx context.Context, email, oldPassword, newPassword string) (MessageResult, error) {
@@ -140,12 +195,19 @@ func (s *AuthService) UpdatePassword(ctx context.Context, email, oldPassword, ne
 		return MessageResult{}, err
 	}
 
-	if user.PasswordHash != oldPassword {
+	matched, _ := verifyPassword(user.PasswordHash, oldPassword)
+	if !matched {
 		newLogRequest(ctx, email, "update_password", "failed")
 		return MessageResult{}, ErrOldPasswordMismatch
 	}
 
-	user.PasswordHash = newPassword
+	hashedPassword, err := hashPassword(newPassword)
+	if err != nil {
+		newLogRequest(ctx, email, "update_password", "failed")
+		return MessageResult{}, fmt.Errorf("could not hash new password: %w", err)
+	}
+
+	user.PasswordHash = hashedPassword
 	if err := s.db.WithContext(ctx).Save(&user).Error; err != nil {
 		newLogRequest(ctx, email, "update_password", "failed")
 		return MessageResult{}, fmt.Errorf("could not update password: %w", err)
@@ -229,4 +291,26 @@ func newLogRequest(ctx context.Context, username, action, status string) {
 	}
 
 	log.Printf("log request sent to kafka topic logs_topic: %s", action)
+}
+
+func hashPassword(plainPassword string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(plainPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(string(hash)), nil
+}
+
+func verifyPassword(storedPasswordHash, plainPassword string) (bool, bool) {
+	if isBcryptHash(storedPasswordHash) {
+		err := bcrypt.CompareHashAndPassword([]byte(storedPasswordHash), []byte(plainPassword))
+		return err == nil, false
+	}
+
+	return storedPasswordHash == plainPassword, true
+}
+
+func isBcryptHash(value string) bool {
+	return strings.HasPrefix(value, "$2a$") || strings.HasPrefix(value, "$2b$") || strings.HasPrefix(value, "$2y$")
 }
