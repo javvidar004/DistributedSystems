@@ -25,7 +25,9 @@ services:
       - CONSUL_HTTP_ADDR=consul:8500
     depends_on:
       - consul
-      - db
+      - dbusers
+      - dbauth
+      - dblogs
       - authbe1
       - authbe2
       - authbe3
@@ -34,10 +36,20 @@ services:
       - usersbe2
       - usersbe3
 
-  db:
-    build: ./DB/
+  dbauth:
+    build: ./DB/auth/
     ports:
       - "5432:5432"
+
+  dbusers:
+    build: ./DB/users/
+    ports:
+      - "5433:5432"
+
+  dblogs:
+    build: ./DB/logs/
+    ports:
+      - "5434:5432"
 
   kafka:
     image: apache/kafka:3.8.0
@@ -66,7 +78,7 @@ services:
       - INSTANCE_ID=authbe1
       - HTTP_PORT=8080
       - GRPC_PORT=50051
-      - DB_HOST=db
+      - DB_HOST=dbauth
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
@@ -74,8 +86,9 @@ services:
       - MIDDLEWARE_HOST=middleware
       - KAFKA_BROKER=kafka:9092
       - CONSUL_HTTP_ADDR=http://consul:8500
+      - USERS_GRPC_ADDR=usersbe1:50051
     depends_on:
-      - db
+      - dbauth
       - consul
       - kafka
 
@@ -88,7 +101,7 @@ services:
       - INSTANCE_ID=authbe2
       - HTTP_PORT=8080
       - GRPC_PORT=50051
-      - DB_HOST=db
+      - DB_HOST=dbauth
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
@@ -96,8 +109,9 @@ services:
       - MIDDLEWARE_HOST=middleware
       - KAFKA_BROKER=kafka:9092
       - CONSUL_HTTP_ADDR=http://consul:8500
+      - USERS_GRPC_ADDR=usersbe1:50051
     depends_on:
-      - db
+      - dbauth
       - consul
       - kafka
 
@@ -110,7 +124,7 @@ services:
       - INSTANCE_ID=authbe3
       - HTTP_PORT=8080
       - GRPC_PORT=50051
-      - DB_HOST=db
+      - DB_HOST=dbauth
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
@@ -118,8 +132,9 @@ services:
       - MIDDLEWARE_HOST=middleware
       - KAFKA_BROKER=kafka:9092
       - CONSUL_HTTP_ADDR=http://consul:8500
+      - USERS_GRPC_ADDR=usersbe1:50051
     depends_on:
-      - db
+      - dbauth
       - consul
       - kafka
 
@@ -132,7 +147,7 @@ services:
       - INSTANCE_ID=logsbe1
       - HTTP_PORT=8080
       - GRPC_PORT=50051
-      - DB_HOST=db
+      - DB_HOST=dblogs
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
@@ -141,7 +156,7 @@ services:
       - KAFKA_BROKER=kafka:9092
       - CONSUL_HTTP_ADDR=http://consul:8500
     depends_on:
-      - db
+      - dblogs
       - consul
       - kafka
 
@@ -154,7 +169,7 @@ services:
       - INSTANCE_ID=usersbe1
       - HTTP_PORT=8080
       - GRPC_PORT=50051
-      - DB_HOST=db
+      - DB_HOST=dbusers
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
@@ -163,7 +178,7 @@ services:
       - KAFKA_BROKER=kafka:9092
       - CONSUL_HTTP_ADDR=http://consul:8500
     depends_on:
-      - db
+      - dbusers
       - consul
       - kafka
 
@@ -176,7 +191,7 @@ services:
       - INSTANCE_ID=usersbe2
       - HTTP_PORT=8080
       - GRPC_PORT=50051
-      - DB_HOST=db
+      - DB_HOST=dbusers
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
@@ -185,7 +200,7 @@ services:
       - KAFKA_BROKER=kafka:9092
       - CONSUL_HTTP_ADDR=http://consul:8500
     depends_on:
-      - db
+      - dbusers
       - consul
       - kafka
 
@@ -198,7 +213,7 @@ services:
       - INSTANCE_ID=usersbe3
       - HTTP_PORT=8080
       - GRPC_PORT=50051
-      - DB_HOST=db
+      - DB_HOST=dbusers
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=mysecretpassword
@@ -207,7 +222,7 @@ services:
       - KAFKA_BROKER=kafka:9092
       - CONSUL_HTTP_ADDR=http://consul:8500
     depends_on:
-      - db
+      - dbusers
       - consul
       - kafka
 
